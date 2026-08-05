@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="432" height="432" viewBox="0 0 108 108" role="img" aria-labelledby="title desc">
+  <title id="title">Codenames Keycards logo</title>
+  <desc id="desc">A colorful coded keycard with a central assassin marker on a deep teal field.</desc>
+
+  <!-- A quiet, night-time field keeps the board legible at launcher-icon sizes. -->
+  <rect width="108" height="108" rx="24" fill="#103F3B"/>
+  <path d="M-16 21 21-16h17L1 21zM70 124l54-54V53L53 124z" fill="#1B5851" opacity=".72"/>
+  <path d="M-10 91 91-10h13L3 91zM75 118l43-43v13l-30 30z" fill="#0B332F" opacity=".58"/>
+
+  <!-- Keycard shadow and raised parchment frame. -->
+  <rect x="20" y="23" width="68" height="68" rx="11" fill="#062723" opacity=".48"/>
+  <rect x="20" y="19" width="68" height="68" rx="11" fill="#E3CBA1"/>
+  <rect x="24" y="23" width="60" height="60" rx="7" fill="#AB8870"/>
+  <rect x="27" y="26" width="54" height="54" rx="4" fill="#242626"/>
+
+  <!-- Five-by-five code grid: team colors, neutral bystanders, and one assassin. -->
+  <g>
+    <path d="M30 29h8v8h-8z" fill="#288DC9"/><path d="M40 29h8v8h-8z" fill="#D7C69F"/><path d="M50 29h8v8h-8z" fill="#B33038"/><path d="M60 29h8v8h-8z" fill="#D7C69F"/><path d="M70 29h8v8h-8z" fill="#2A9034"/>
+    <path d="M30 39h8v8h-8z" fill="#D7C69F"/><path d="M40 39h8v8h-8z" fill="#288DC9"/><path d="M50 39h8v8h-8z" fill="#B33038"/><path d="M60 39h8v8h-8z" fill="#DA781F"/><path d="M70 39h8v8h-8z" fill="#D7C69F"/>
+    <path d="M30 49h8v8h-8z" fill="#2A9034"/><path d="M40 49h8v8h-8z" fill="#288DC9"/><path d="M50 49h8v8h-8z" fill="#111615"/><path d="M60 49h8v8h-8z" fill="#B33038"/><path d="M70 49h8v8h-8z" fill="#DA781F"/>
+    <path d="M30 59h8v8h-8z" fill="#D7C69F"/><path d="M40 59h8v8h-8z" fill="#2A9034"/><path d="M50 59h8v8h-8z" fill="#B33038"/><path d="M60 59h8v8h-8z" fill="#288DC9"/><path d="M70 59h8v8h-8z" fill="#D7C69F"/>
+    <path d="M30 69h8v8h-8z" fill="#DA781F"/><path d="M40 69h8v8h-8z" fill="#288DC9"/><path d="M50 69h8v8h-8z" fill="#D7C69F"/><path d="M60 69h8v8h-8z" fill="#2A9034"/><path d="M70 69h8v8h-8z" fill="#B33038"/>
+  </g>
+  <path d="m51.6 50.8 4.8 4.4m0-4.4-4.8 4.4" fill="none" stroke="#E3CBA1" stroke-linecap="round" stroke-width="1.3"/>
+</svg>

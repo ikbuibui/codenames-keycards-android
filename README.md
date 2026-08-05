@@ -2,6 +2,8 @@
 
 Create [Codenames](https://en.wikipedia.org/wiki/Codenames_(board_game)) keycards on your Android device. Configure the board size, number of teams (two to four), tiles per team, and starting team, then generate a new card whenever you need one. The starting team receives one extra tile; every card also includes an assassin tile.
 
+Codenames Keycards is an independent, unofficial companion app and is not affiliated with or endorsed by Czech Games Edition.
+
 ## How it works
 
 - Generate keycards entirely on your device.

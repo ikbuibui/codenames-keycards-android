@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500" role="img" aria-labelledby="title desc">
+  <title id="title">Codenames Keycards feature graphic</title>
+  <desc id="desc">Codenames Keycards, an offline keycard generator, beside a colorful five-by-five keycard.</desc>
+  <rect width="1024" height="500" fill="#103F3B"/>
+  <path d="M-90 176 176-90h122L32 176zM647 590l467-467V0L524 590z" fill="#1B5851" opacity=".72"/>
+  <path d="M-23 500 477 0h97L74 500zM810 568l214-214v67L877 568z" fill="#0B332F" opacity=".58"/>
+  <circle cx="83" cy="102" r="7" fill="#59C1B6"/>
+  <path d="M105 102H402" stroke="#59C1B6" stroke-width="3" opacity=".8"/>
+  <text x="76" y="182" fill="#F5F0EC" font-family="sans-serif" font-size="65" font-weight="800" letter-spacing="4">CODENAMES</text>
+  <text x="76" y="238" fill="#59C1B6" font-family="sans-serif" font-size="38" font-weight="700" letter-spacing="2">KEYCARDS</text>
+  <text x="76" y="306" fill="#D5C3BD" font-family="sans-serif" font-size="23" font-weight="500">OFFLINE KEYCARD GENERATOR</text>
+  <text x="76" y="353" fill="#F5F0EC" font-family="sans-serif" font-size="21">Make a fresh board for every game night.</text>
+
+  <!-- A large keycard makes the purpose of the app clear even at small storefront sizes. -->
+  <rect x="654" y="82" width="306" height="330" rx="36" fill="#062723" opacity=".48"/>
+  <rect x="654" y="62" width="306" height="330" rx="36" fill="#E3CBA1"/>
+  <rect x="674" y="82" width="266" height="290" rx="24" fill="#AB8870"/>
+  <rect x="693" y="101" width="228" height="252" rx="12" fill="#242626"/>
+  <g>
+    <path d="M704 118h34v34h-34z" fill="#288DC9"/><path d="M747 118h34v34h-34z" fill="#D7C69F"/><path d="M790 118h34v34h-34z" fill="#B33038"/><path d="M833 118h34v34h-34z" fill="#D7C69F"/><path d="M876 118h34v34h-34z" fill="#2A9034"/>
+    <path d="M704 161h34v34h-34z" fill="#D7C69F"/><path d="M747 161h34v34h-34z" fill="#288DC9"/><path d="M790 161h34v34h-34z" fill="#B33038"/><path d="M833 161h34v34h-34z" fill="#DA781F"/><path d="M876 161h34v34h-34z" fill="#D7C69F"/>
+    <path d="M704 204h34v34h-34z" fill="#2A9034"/><path d="M747 204h34v34h-34z" fill="#288DC9"/><path d="M790 204h34v34h-34z" fill="#111615"/><path d="M833 204h34v34h-34z" fill="#B33038"/><path d="M876 204h34v34h-34z" fill="#DA781F"/>
+    <path d="M704 247h34v34h-34z" fill="#D7C69F"/><path d="M747 247h34v34h-34z" fill="#2A9034"/><path d="M790 247h34v34h-34z" fill="#B33038"/><path d="M833 247h34v34h-34z" fill="#288DC9"/><path d="M876 247h34v34h-34z" fill="#D7C69F"/>
+    <path d="M704 290h34v34h-34z" fill="#DA781F"/><path d="M747 290h34v34h-34z" fill="#288DC9"/><path d="M790 290h34v34h-34z" fill="#D7C69F"/><path d="M833 290h34v34h-34z" fill="#2A9034"/><path d="M876 290h34v34h-34z" fill="#B33038"/>
+  </g>
+  <path d="m796 212 21 19m0-19-21 19" fill="none" stroke="#E3CBA1" stroke-linecap="round" stroke-width="7"/>
+</svg>

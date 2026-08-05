@@ -1,0 +1,4 @@
+Initial release
+• Generate keycards for two to four teams.
+• Configure board size, team tiles, and starting team.
+• Freeze a board and play fully offline.
