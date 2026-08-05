@@ -13,3 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+# Android release signing material
+*.jks
+*.keystore
+*.p12
+*.pfx

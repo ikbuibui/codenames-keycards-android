@@ -17,18 +17,16 @@ This Android app was inspired by the [Codenames Key Card Generator](https://gith
 
 ## Build from source
 
-To build the app yourself, install JDK 17 or newer and an Android SDK with the required Gradle dependencies available locally. From this directory, run:
+To build the app yourself, install JDK 17 or newer and the Android SDK. From this directory, run:
 
 ```sh
-export JAVA_HOME=/path/to/jdk-17
-./gradlew testDebugUnitTest
-./gradlew assembleDebug
+./gradlew testDebugUnitTest assembleDebug
 ```
 
-The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`. Install it on a connected device or emulator with:
+The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`. To install it on a connected device or emulator, use:
 
 ```sh
-android run --apks app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ## License

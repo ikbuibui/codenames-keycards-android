@@ -3,6 +3,19 @@ plugins {
   alias(libs.plugins.compose.compiler)
 }
 
+// Set these environment variables to produce a signed release APK. They are
+// supplied by the GitHub release workflow and are deliberately not in source.
+val releaseStoreFile: String? = System.getenv("RELEASE_STORE_FILE")
+val releaseStorePassword: String? = System.getenv("RELEASE_STORE_PASSWORD")
+val releaseKeyAlias: String? = System.getenv("RELEASE_KEY_ALIAS")
+val releaseKeyPassword: String? = System.getenv("RELEASE_KEY_PASSWORD")
+val hasReleaseSigningCredentials = listOf(
+  releaseStoreFile,
+  releaseStorePassword,
+  releaseKeyAlias,
+  releaseKeyPassword,
+).all { !it.isNullOrBlank() }
+
 android {
   namespace = "com.codenames.keycards"
   compileSdk = 36
@@ -15,8 +28,23 @@ android {
     versionName = "1.0"
   }
 
+  signingConfigs {
+    if (hasReleaseSigningCredentials) {
+      create("release") {
+        storeType = "PKCS12"
+        storeFile = rootProject.file(requireNotNull(releaseStoreFile))
+        storePassword = requireNotNull(releaseStorePassword)
+        keyAlias = requireNotNull(releaseKeyAlias)
+        keyPassword = requireNotNull(releaseKeyPassword)
+      }
+    }
+  }
+
   buildTypes {
     release {
+      if (hasReleaseSigningCredentials) {
+        signingConfig = signingConfigs.getByName("release")
+      }
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
     }
