@@ -1,17 +1,19 @@
-Create a fresh keycard whenever game night calls for one.
+Set up a Codenames keycard, then run the game from the same offline app.
 
-Codenames Keycards generates colorful spymaster keycards directly on your Android device. Set up a board that matches your table, then hand it to the spymaster.
+Codenames Keycards generates colorful spymaster keycards directly on your Android device. Arrange teams in turn order, choose a timer if you want one, and hand the board to the spymaster.
 
 FEATURES
 • Generate keycards entirely offline.
 • Choose board sizes from 2×2 to 10×10.
 • Play with two, three, or four teams.
-• Set the number of tiles for each team and choose the starting team.
-• The starting team automatically receives one extra tile.
+• Set the number of tiles for each team and drag teams into turn order.
+• Give only the first team an optional extra tile.
+• Choose No timer or set a turn duration with the system time picker.
+• Run a focused game screen: tap the timer to advance, pause, resume, or return to setup.
 • Every keycard includes an assassin tile.
-• Freeze a board to keep the exact same keycard when you close and reopen the app.
+• Save the board, setup, timer, and game progress automatically. Interrupted games restore paused.
 
 PRIVATE BY DESIGN
-Codenames Keycards has no network permission, ads, analytics SDKs, web view, remote API, or downloaded game data. Your frozen board stays in the app's private storage on your device.
+Codenames Keycards has no network permission, ads, analytics SDKs, web view, remote API, or downloaded game data. Your saved board stays in the app's private storage on your device.
 
 Codenames Keycards is an independent, unofficial companion app and is not affiliated with or endorsed by Czech Games Edition.

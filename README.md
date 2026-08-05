@@ -1,6 +1,6 @@
 # Codenames Keycards for Android
 
-Create [Codenames](https://en.wikipedia.org/wiki/Codenames_(board_game)) keycards on your Android device. Configure the board size, number of teams (two to four), tiles per team, and starting team, then generate a new card whenever you need one. The starting team receives one extra tile; every card also includes an assassin tile.
+Create [Codenames](https://en.wikipedia.org/wiki/Codenames_(board_game)) keycards and run a game on your Android device. Configure the board size, number of teams (two to four), tiles per team, turn order, optional first-team bonus, and turn timer. Every card includes an assassin tile.
 
 Codenames Keycards is an independent, unofficial companion app and is not affiliated with or endorsed by Czech Games Edition.
 
@@ -8,8 +8,11 @@ Codenames Keycards is an independent, unofficial companion app and is not affili
 
 - Generate keycards entirely on your device.
 - Choose board sizes from 2×2 to 10×10, subject to the selected teams and tile counts fitting on the board.
-- Freeze a card to keep the exact same card when you close and reopen the app. Unfreeze it to change settings or generate another card.
-- Use the app offline: it has no network permission, web view, analytics SDK, remote API, or downloaded game data. Frozen-card settings are stored only in the app's private storage, and cloud backup is disabled.
+- Drag teams into the desired turn order. The first team begins the game, and can optionally receive one extra tile.
+- Play with a countdown selected through rolling minute and second pickers, or choose No timer and tap `∞` to advance turns.
+- Start a focused game screen with the active team, keycard, and pause menu. The display stays awake only while an unpaused game is running.
+- Your board, setup, and game progress are always saved in the app's private storage. An interrupted game returns paused, so time never elapses while the app is away.
+- Use the app offline: it has no network permission, web view, analytics SDK, remote API, or downloaded game data. Cloud backup is disabled.
 
 ## Related project
 

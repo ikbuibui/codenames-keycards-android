@@ -1,0 +1,3 @@
+• Add configurable turn order and an optional first-team bonus.
+• Start games on a dedicated screen with an optional turn timer.
+• Save boards and paused game progress, and keep the display awake during play.

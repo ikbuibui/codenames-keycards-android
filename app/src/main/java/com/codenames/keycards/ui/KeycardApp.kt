@@ -1,12 +1,20 @@
 package com.codenames.keycards.ui
 
+import android.app.Activity
+import android.view.ContextThemeWrapper
+import android.view.WindowManager
+import android.widget.NumberPicker
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,47 +25,75 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.Switch
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.codenames.keycards.data.FrozenKeycardStore
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import com.codenames.keycards.data.GameStateStore
+import com.codenames.keycards.model.DEFAULT_TURN_DURATION_SECONDS
+import com.codenames.keycards.model.GameState
 import com.codenames.keycards.model.KeycardSettings
 import com.codenames.keycards.model.MAX_BOARD_SIZE
 import com.codenames.keycards.model.MIN_BOARD_SIZE
+import com.codenames.keycards.model.TurnTimer
 import com.codenames.keycards.model.TileRole
+import com.codenames.keycards.model.advanceTurn
+import com.codenames.keycards.model.exitToSetup
 import com.codenames.keycards.model.generateKeycard
 import com.codenames.keycards.model.maximumTeamCount
 import com.codenames.keycards.model.maximumTilesPerTeam
 import com.codenames.keycards.model.minimumBoardSize
 import com.codenames.keycards.model.normalized
+import com.codenames.keycards.model.normalizedGameState
+import com.codenames.keycards.model.pauseGame
+import com.codenames.keycards.model.resumeGame
+import com.codenames.keycards.model.startGame
+import com.codenames.keycards.model.tickTimer
 import com.codenames.keycards.theme.CodenamesKeycardsTheme
-import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.delay
+import java.util.Locale
 
 private val Red = Color(0xFFB33038)
 private val Blue = Color(0xFF288DC9)
@@ -67,6 +103,7 @@ private val Bystander = Color(0xFFD7C69F)
 private val Assassin = Color(0xFF404040)
 private val WoodLight = Color(0xFFC8AB99)
 private val WoodDark = Color(0xFFA88573)
+private const val MAX_TURN_DURATION_MINUTES = 59
 
 private data class TeamOption(val number: Int, val name: String, val color: Color, val symbol: String)
 
@@ -81,50 +118,100 @@ private val teams =
 @Composable
 fun KeycardApp() {
   val appContext = LocalContext.current.applicationContext
-  val frozenStore = remember(appContext) { FrozenKeycardStore(appContext) }
-  var settings by remember { mutableStateOf(frozenStore.load() ?: KeycardSettings()) }
+  val gameStateStore = remember(appContext) { GameStateStore(appContext) }
+  var gameState by remember { mutableStateOf(gameStateStore.load()) }
+
+  fun updateState(change: (GameState) -> GameState) {
+    gameState = normalizedGameState(change(gameState))
+    gameStateStore.save(gameState)
+  }
 
   fun updateSettings(change: (KeycardSettings) -> KeycardSettings) {
-    if (!settings.frozen) {
-      val nextSeed = maxOf(System.currentTimeMillis(), settings.seed + 1)
-      settings = normalized(change(settings)).copy(seed = nextSeed)
+    updateState { state -> state.copy(settings = normalized(change(state.settings))) }
+  }
+
+  KeepScreenOn(keepScreenOn = gameState.isRunning)
+  PauseWhenActivityStops(
+    gameState = gameState,
+    onPause = { updateState(::pauseGame) },
+  )
+
+  LaunchedEffect(gameState.isRunning, gameState.timer.durationSeconds, gameState.remainingSeconds) {
+    if (gameState.isRunning && gameState.timer.hasTimer && gameState.remainingSeconds!! > 0) {
+      delay(1_000)
+      updateState(::tickTimer)
     }
   }
 
-  fun setFrozen(frozen: Boolean) {
-    settings = settings.copy(frozen = frozen)
-    if (frozen) frozenStore.save(settings) else frozenStore.clear()
+  if (gameState.gameMode) {
+    GameScreen(
+      gameState = gameState,
+      onAdvanceTurn = { updateState(::advanceTurn) },
+      onPause = { updateState(::pauseGame) },
+      onResume = { updateState(::resumeGame) },
+      onExit = { updateState(::exitToSetup) },
+    )
+  } else {
+    SetupScreen(
+      gameState = gameState,
+      onGenerate = {
+        updateSettings { settings ->
+          settings.copy(seed = maxOf(System.currentTimeMillis(), settings.seed + 1))
+        }
+      },
+      onStartGame = { updateState(::startGame) },
+      onSettingsChanged = ::updateSettings,
+      onTimerChanged = { timer -> updateState { state -> state.copy(timer = timer) } },
+    )
   }
-
-  KeycardScreen(
-    settings = settings,
-    onGenerate = { updateSettings { it } },
-    onSettingsChanged = ::updateSettings,
-    onFrozenChanged = ::setFrozen,
-  )
 }
 
 @Composable
-private fun KeycardScreen(
-  settings: KeycardSettings,
-  onGenerate: () -> Unit,
-  onSettingsChanged: ((KeycardSettings) -> KeycardSettings) -> Unit,
-  onFrozenChanged: (Boolean) -> Unit,
-) {
-  val board = remember(settings.teamCount, settings.boardSize, settings.tilesPerTeam, settings.startingTeam, settings.seed) {
-    generateKeycard(settings)
+private fun PauseWhenActivityStops(gameState: GameState, onPause: () -> Unit) {
+  val lifecycleOwner = LocalLifecycleOwner.current
+  val latestIsRunning by rememberUpdatedState(gameState.isRunning)
+  val latestOnPause by rememberUpdatedState(onPause)
+  DisposableEffect(lifecycleOwner) {
+    val observer = LifecycleEventObserver { _, event ->
+      if (event == Lifecycle.Event.ON_STOP && latestIsRunning) latestOnPause()
+    }
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
   }
+}
+
+@Composable
+private fun KeepScreenOn(keepScreenOn: Boolean) {
+  val activity = LocalContext.current as? Activity
+  DisposableEffect(activity, keepScreenOn) {
+    if (keepScreenOn) {
+      activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    } else {
+      activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+    onDispose { activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+  }
+}
+
+@Composable
+private fun SetupScreen(
+  gameState: GameState,
+  onGenerate: () -> Unit,
+  onStartGame: () -> Unit,
+  onSettingsChanged: ((KeycardSettings) -> KeycardSettings) -> Unit,
+  onTimerChanged: (TurnTimer) -> Unit,
+) {
+  val settings = gameState.settings
+  val board = remember(settings) { generateKeycard(settings) }
 
   Surface(
     modifier = Modifier.fillMaxSize(),
     color = MaterialTheme.colorScheme.background,
     contentColor = MaterialTheme.colorScheme.onBackground,
   ) {
-    Box(modifier = Modifier.fillMaxSize()) {
-      Column(
+    Column(
       modifier =
         Modifier
-          .align(Alignment.TopCenter)
           .fillMaxWidth()
           .widthIn(max = 720.dp)
           .windowInsetsPadding(WindowInsets.safeDrawing)
@@ -134,16 +221,20 @@ private fun KeycardScreen(
     ) {
       Header()
       KeycardBoard(board = board, settings = settings)
-      BoardActions(frozen = settings.frozen, onGenerate = onGenerate, onFrozenChanged = onFrozenChanged)
-      SettingsPanel(settings = settings, onSettingsChanged = onSettingsChanged)
+      BoardActions(onGenerate = onGenerate, onStartGame = onStartGame)
+      SettingsPanel(
+        settings = settings,
+        timer = gameState.timer,
+        onSettingsChanged = onSettingsChanged,
+        onTimerChanged = onTimerChanged,
+      )
       Text(
-        text = "Generated entirely on this device. This app has no network permission, web view, or remote service.",
+        text = "Saved only on this device. This app has no network permission, web view, or remote service.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
       )
-      }
     }
   }
 }
@@ -163,7 +254,8 @@ private fun Header() {
 
 @Composable
 private fun KeycardBoard(board: List<Int>, settings: KeycardSettings) {
-  val startingColor = if (settings.startingTeam == TileRole.BYSTANDER) WoodLight else teamFor(settings.startingTeam).color
+  val firstTeam = settings.turnOrder.firstOrNull()
+  val borderColor = firstTeam?.let(::teamFor)?.color ?: WoodLight
 
   BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
     val boardWidth = minOf(maxWidth - 8.dp, 560.dp)
@@ -175,8 +267,8 @@ private fun KeycardBoard(board: List<Int>, settings: KeycardSettings) {
           .width(boardWidth)
           .aspectRatio(1f)
           .clip(RoundedCornerShape(30.dp))
-          .background(startingColor)
-          .padding(if (settings.startingTeam == TileRole.BYSTANDER) 0.dp else 7.dp),
+          .background(borderColor)
+          .padding(if (firstTeam == null) 0.dp else 7.dp),
     ) {
       Box(
         modifier =
@@ -235,31 +327,13 @@ private fun KeycardTile(role: Int, symbolSize: androidx.compose.ui.unit.TextUnit
 }
 
 @Composable
-private fun BoardActions(frozen: Boolean, onGenerate: () -> Unit, onFrozenChanged: (Boolean) -> Unit) {
+private fun BoardActions(onGenerate: () -> Unit, onStartGame: () -> Unit) {
   Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-    if (frozen) {
-      OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-        Text(
-          text = "This keycard is frozen and will be restored when the app is reopened. Unfreeze it to change settings or generate another card.",
-          modifier = Modifier.padding(14.dp),
-          style = MaterialTheme.typography.bodyMedium,
-        )
-      }
-    } else {
-      Button(onClick = onGenerate, modifier = Modifier.fillMaxWidth()) {
-        Text("Generate new board")
-      }
+    Button(onClick = onStartGame, modifier = Modifier.fillMaxWidth()) {
+      Text("Start game")
     }
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-      Column(modifier = Modifier.weight(1f)) {
-        Text("Freeze board", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-        Text(
-          "Keep this exact keycard after closing the app",
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-      }
-      Switch(checked = frozen, onCheckedChange = onFrozenChanged)
+    OutlinedButton(onClick = onGenerate, modifier = Modifier.fillMaxWidth()) {
+      Text("Generate new board")
     }
   }
 }
@@ -267,12 +341,13 @@ private fun BoardActions(frozen: Boolean, onGenerate: () -> Unit, onFrozenChange
 @Composable
 private fun SettingsPanel(
   settings: KeycardSettings,
+  timer: TurnTimer,
   onSettingsChanged: ((KeycardSettings) -> KeycardSettings) -> Unit,
+  onTimerChanged: (TurnTimer) -> Unit,
 ) {
-  val enabled = !settings.frozen
-  val minBoard = minimumBoardSize(settings.teamCount, settings.tilesPerTeam, settings.startingTeam)
-  val maxTiles = maximumTilesPerTeam(settings.boardSize, settings.teamCount, settings.startingTeam)
-  val maxTeams = maximumTeamCount(settings.boardSize, settings.tilesPerTeam, settings.startingTeam)
+  val minBoard = minimumBoardSize(settings.teamCount, settings.tilesPerTeam, settings.firstTeamBonus)
+  val maxTiles = maximumTilesPerTeam(settings.boardSize, settings.teamCount, settings.firstTeamBonus)
+  val maxTeams = maximumTeamCount(settings.boardSize, settings.tilesPerTeam, settings.firstTeamBonus)
 
   Card(
     modifier = Modifier.fillMaxWidth(),
@@ -282,7 +357,7 @@ private fun SettingsPanel(
       Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text("Settings", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text(
-          if (enabled) "Changing a setting creates a new keycard." else "Unfreeze the board to change settings.",
+          "Your setup and board are saved automatically.",
           style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -290,34 +365,41 @@ private fun SettingsPanel(
       SettingStepper(
         title = "Board size",
         value = settings.boardSize,
-        decreaseEnabled = enabled && settings.boardSize > minBoard,
-        increaseEnabled = enabled && settings.boardSize < MAX_BOARD_SIZE,
+        decreaseEnabled = settings.boardSize > minBoard,
+        increaseEnabled = settings.boardSize < MAX_BOARD_SIZE,
         onDecrease = { onSettingsChanged { it.copy(boardSize = it.boardSize - 1) } },
         onIncrease = { onSettingsChanged { it.copy(boardSize = it.boardSize + 1) } },
       )
       SettingStepper(
         title = "Tiles per team",
         value = settings.tilesPerTeam,
-        decreaseEnabled = enabled && settings.tilesPerTeam > 1,
-        increaseEnabled = enabled && settings.tilesPerTeam < maxTiles,
+        decreaseEnabled = settings.tilesPerTeam > 1,
+        increaseEnabled = settings.tilesPerTeam < maxTiles,
         onDecrease = { onSettingsChanged { it.copy(tilesPerTeam = it.tilesPerTeam - 1) } },
         onIncrease = { onSettingsChanged { it.copy(tilesPerTeam = it.tilesPerTeam + 1) } },
       )
       SettingStepper(
         title = "Number of teams",
         value = settings.teamCount,
-        decreaseEnabled = enabled && settings.teamCount > 2,
-        increaseEnabled = enabled && settings.teamCount < maxTeams,
+        decreaseEnabled = settings.teamCount > 2,
+        increaseEnabled = settings.teamCount < maxTeams,
         onDecrease = { onSettingsChanged { it.copy(teamCount = it.teamCount - 1) } },
         onIncrease = { onSettingsChanged { it.copy(teamCount = it.teamCount + 1) } },
       )
-      StartingTeamPicker(
-        settings = settings,
-        enabled = enabled,
-        onStartingTeamChanged = { team -> onSettingsChanged { it.copy(startingTeam = team) } },
+      TurnOrderEditor(
+        turnOrder = settings.turnOrder,
+        onMove = { from, to ->
+          onSettingsChanged { current -> current.copy(turnOrder = moveTeam(current.turnOrder, from, to)) }
+        },
       )
+      FirstTeamBonusSetting(
+        enabled = settings.firstTeamBonus,
+        firstTeam = teamFor(settings.turnOrder.first()),
+        onEnabledChanged = { enabled -> onSettingsChanged { it.copy(firstTeamBonus = enabled) } },
+      )
+      TimerSetting(timer = timer, onTimerChanged = onTimerChanged)
       Text(
-        text = "Board sizes run from $MIN_BOARD_SIZE×$MIN_BOARD_SIZE to $MAX_BOARD_SIZE×$MAX_BOARD_SIZE. A setting is unavailable when the board cannot fit all team tiles, the assassin, and the extra starting tile.",
+        text = "Board sizes run from $MIN_BOARD_SIZE×$MIN_BOARD_SIZE to $MAX_BOARD_SIZE×$MAX_BOARD_SIZE. A setting is unavailable when the board cannot fit every team tile, the assassin, and the optional extra tile.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
@@ -348,39 +430,343 @@ private fun SettingStepper(
 }
 
 @Composable
-private fun StartingTeamPicker(
-  settings: KeycardSettings,
-  enabled: Boolean,
-  onStartingTeamChanged: (Int) -> Unit,
-) {
+private fun TurnOrderEditor(turnOrder: List<Int>, onMove: (from: Int, to: Int) -> Unit) {
+  var draggingTeam by remember { mutableStateOf<Int?>(null) }
+  var dragOffset by remember { mutableFloatStateOf(0f) }
+  val moveThreshold = with(LocalDensity.current) { 36.dp.toPx() }
+  val latestTurnOrder by rememberUpdatedState(turnOrder)
+  val latestOnMove by rememberUpdatedState(onMove)
+
   Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-    Text("Starting team", style = MaterialTheme.typography.titleSmall)
+    Text("Turn order", style = MaterialTheme.typography.titleSmall)
     Text(
-      "The starting team gets one extra tile to guess.",
+      "Long-press and drag teams. The first team begins the game.",
       style = MaterialTheme.typography.bodySmall,
       color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-      FilterChip(
-        selected = settings.startingTeam == TileRole.BYSTANDER,
-        onClick = { onStartingTeamChanged(TileRole.BYSTANDER) },
-        enabled = enabled,
-        label = { Text("No starting team") },
-      )
-      teams.take(settings.teamCount).forEach { team ->
-        FilterChip(
-          selected = settings.startingTeam == team.number,
-          onClick = { onStartingTeamChanged(team.number) },
-          enabled = enabled,
-          label = { Text("${team.name} team") },
-          leadingIcon = {
-            Box(
-              modifier = Modifier.size(14.dp).clip(RoundedCornerShape(50)).background(team.color),
-            )
-          },
-        )
+      turnOrder.forEachIndexed { index, teamNumber ->
+        key(teamNumber) {
+          val team = teamFor(teamNumber)
+          val isDragging = draggingTeam == team.number
+          Surface(
+          color = if (index == 0) team.color.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant,
+          shape = RoundedCornerShape(12.dp),
+          modifier =
+            Modifier
+              .fillMaxWidth()
+              .graphicsLayer { translationY = if (isDragging) dragOffset else 0f }
+              .border(if (index == 0) 1.dp else 0.dp, if (index == 0) team.color else Color.Transparent, RoundedCornerShape(12.dp))
+              .pointerInput(team.number) {
+                detectDragGesturesAfterLongPress(
+                  onDragStart = {
+                    draggingTeam = team.number
+                    dragOffset = 0f
+                  },
+                  onDragCancel = {
+                    draggingTeam = null
+                    dragOffset = 0f
+                  },
+                  onDragEnd = {
+                    draggingTeam = null
+                    dragOffset = 0f
+                  },
+                  onDrag = { change, dragAmount ->
+                    change.consume()
+                    dragOffset += dragAmount.y
+                    val currentIndex = latestTurnOrder.indexOf(team.number)
+                    when {
+                      dragOffset > moveThreshold && currentIndex < latestTurnOrder.lastIndex -> {
+                        latestOnMove(currentIndex, currentIndex + 1)
+                        dragOffset -= moveThreshold
+                      }
+                      dragOffset < -moveThreshold && currentIndex > 0 -> {
+                        latestOnMove(currentIndex, currentIndex - 1)
+                        dragOffset += moveThreshold
+                      }
+                    }
+                  },
+                )
+              }
+              .padding(horizontal = 12.dp, vertical = 10.dp),
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("☰", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 18.sp)
+            Spacer(Modifier.width(10.dp))
+            Box(modifier = Modifier.size(14.dp).clip(RoundedCornerShape(50)).background(team.color))
+            Spacer(Modifier.width(8.dp))
+            Text("${team.name} team", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            if (index == 0) {
+              Text("First", style = MaterialTheme.typography.labelMedium, color = team.color, fontWeight = FontWeight.Bold)
+            }
+          }
+        }
       }
     }
+  }
+}
+}
+
+@Composable
+private fun FirstTeamBonusSetting(enabled: Boolean, firstTeam: TeamOption, onEnabledChanged: (Boolean) -> Unit) {
+  Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+      Text("First team +1 tile", style = MaterialTheme.typography.titleSmall)
+      Text(
+        if (enabled) "${firstTeam.name} gets one extra board tile." else "No team gets an extra board tile.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+    }
+    Switch(checked = enabled, onCheckedChange = onEnabledChanged)
+  }
+}
+
+@Composable
+private fun TimerSetting(timer: TurnTimer, onTimerChanged: (TurnTimer) -> Unit) {
+  var showDurationPicker by remember { mutableStateOf(false) }
+
+  Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Text("Turn timer", style = MaterialTheme.typography.titleSmall)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      FilterChip(
+        selected = !timer.hasTimer,
+        onClick = { onTimerChanged(TurnTimer()) },
+        label = { Text("No timer  ∞") },
+      )
+      FilterChip(
+        selected = timer.hasTimer,
+        onClick = { showDurationPicker = true },
+        label = { Text(timer.durationSeconds?.let(::formatDuration) ?: "Set duration") },
+      )
+    }
+    Text(
+      if (timer.hasTimer) "Tap the duration to change it." else "The timer control still advances turns.",
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+  }
+
+  if (showDurationPicker) {
+    DurationPickerDialog(
+      initialDurationSeconds = timer.durationSeconds ?: DEFAULT_TURN_DURATION_SECONDS,
+      onDismiss = { showDurationPicker = false },
+      onDurationSelected = { seconds ->
+        onTimerChanged(TurnTimer(seconds))
+        showDurationPicker = false
+      },
+    )
+  }
+}
+
+@Composable
+private fun DurationPickerDialog(
+  initialDurationSeconds: Int,
+  onDismiss: () -> Unit,
+  onDurationSelected: (Int) -> Unit,
+) {
+  var minutes by remember(initialDurationSeconds) {
+    mutableStateOf((initialDurationSeconds / 60).coerceIn(0, MAX_TURN_DURATION_MINUTES))
+  }
+  var seconds by remember(initialDurationSeconds) { mutableStateOf(initialDurationSeconds % 60) }
+  val selectedDurationSeconds = minutes * 60 + seconds
+
+  AlertDialog(
+    onDismissRequest = onDismiss,
+    title = { Text("Turn duration") },
+    text = {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        RollingNumberPicker(
+          label = "Minutes",
+          value = minutes,
+          range = 0..MAX_TURN_DURATION_MINUTES,
+          onValueChanged = { minutes = it },
+        )
+        RollingNumberPicker(
+          label = "Seconds",
+          value = seconds,
+          range = 0..59,
+          formatter = { String.format(Locale.getDefault(), "%02d", it) },
+          onValueChanged = { seconds = it },
+        )
+      }
+    },
+    confirmButton = {
+      TextButton(
+        onClick = { onDurationSelected(selectedDurationSeconds) },
+        enabled = selectedDurationSeconds > 0,
+      ) {
+        Text("Set timer")
+      }
+    },
+    dismissButton = {
+      TextButton(onClick = onDismiss) { Text("Cancel") }
+    },
+  )
+}
+
+@Composable
+private fun RollingNumberPicker(
+  label: String,
+  value: Int,
+  range: IntRange,
+  formatter: (Int) -> String = Int::toString,
+  onValueChanged: (Int) -> Unit,
+) {
+  Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    AndroidView(
+      modifier = Modifier.width(100.dp).height(160.dp).semantics { contentDescription = "$label picker" },
+      factory = { context ->
+        NumberPicker(ContextThemeWrapper(context, android.R.style.Theme_Material_NoActionBar)).apply {
+          minValue = range.first
+          maxValue = range.last
+          wrapSelectorWheel = true
+          setFormatter(NumberPicker.Formatter { number -> formatter(number) })
+        }
+      },
+      update = { picker ->
+        if (picker.value != value) picker.value = value
+        picker.setOnValueChangedListener { _, _, newValue -> onValueChanged(newValue) }
+      },
+    )
+    Text(label, style = MaterialTheme.typography.labelLarge)
+  }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GameScreen(
+  gameState: GameState,
+  onAdvanceTurn: () -> Unit,
+  onPause: () -> Unit,
+  onResume: () -> Unit,
+  onExit: () -> Unit,
+) {
+  val settings = gameState.settings
+  val board = remember(settings) { generateKeycard(settings) }
+  val activeTeam = teamFor(gameState.activeTeam)
+  var showPauseSheet by remember { mutableStateOf(false) }
+
+  Surface(
+    modifier = Modifier.fillMaxSize(),
+    color = MaterialTheme.colorScheme.background,
+    contentColor = MaterialTheme.colorScheme.onBackground,
+  ) {
+    Column(modifier = Modifier.fillMaxSize()) {
+      Spacer(modifier = Modifier.fillMaxWidth().height(5.dp).background(activeTeam.color))
+      Column(
+        modifier =
+          Modifier
+            .fillMaxWidth()
+            .widthIn(max = 720.dp)
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+      ) {
+        GameTimerControl(
+          team = activeTeam,
+          timer = gameState.timer,
+          remainingSeconds = gameState.remainingSeconds,
+          isPaused = gameState.isPaused,
+          onAdvanceTurn = onAdvanceTurn,
+        )
+        KeycardBoard(board = board, settings = settings)
+        OutlinedButton(
+          onClick = {
+            if (!gameState.isPaused) onPause()
+            showPauseSheet = true
+          },
+          modifier = Modifier.align(Alignment.CenterHorizontally).semantics { contentDescription = "Open pause menu" },
+        ) {
+          Text("Ⅱ", fontSize = 18.sp)
+        }
+      }
+    }
+  }
+
+  if (showPauseSheet) {
+    ModalBottomSheet(onDismissRequest = { showPauseSheet = false }) {
+      Column(
+        modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+      ) {
+        Text("Game paused", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Button(
+          onClick = {
+            onResume()
+            showPauseSheet = false
+          },
+          modifier = Modifier.fillMaxWidth(),
+        ) {
+          Text("Resume game")
+        }
+        OutlinedButton(
+          onClick = {
+            onExit()
+            showPauseSheet = false
+          },
+          modifier = Modifier.fillMaxWidth(),
+        ) {
+          Text("Exit to setup")
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun GameTimerControl(
+  team: TeamOption,
+  timer: TurnTimer,
+  remainingSeconds: Int?,
+  isPaused: Boolean,
+  onAdvanceTurn: () -> Unit,
+) {
+  Surface(
+    color = MaterialTheme.colorScheme.surface,
+    shape = RoundedCornerShape(20.dp),
+    modifier =
+      Modifier
+        .fillMaxWidth()
+        .border(2.dp, team.color, RoundedCornerShape(20.dp))
+        .clip(RoundedCornerShape(20.dp))
+        .clickable(enabled = !isPaused, onClick = onAdvanceTurn)
+        .padding(vertical = 14.dp, horizontal = 20.dp),
+  ) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+      Text("${team.name} team", color = team.color, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+      Text(
+        text = if (timer.hasTimer) formatDuration(remainingSeconds ?: timer.durationSeconds!!) else "∞",
+        fontSize = 48.sp,
+        lineHeight = 52.sp,
+        fontWeight = FontWeight.Black,
+      )
+      Text(
+        if (isPaused) "Paused" else "Tap to advance turn",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+    }
+  }
+}
+
+private fun moveTeam(order: List<Int>, from: Int, to: Int): List<Int> {
+  if (from !in order.indices || to !in order.indices || from == to) return order
+  return order.toMutableList().apply { add(to, removeAt(from)) }
+}
+
+private fun formatDuration(totalSeconds: Int): String {
+  val hours = totalSeconds / 3_600
+  val minutes = totalSeconds % 3_600 / 60
+  val seconds = totalSeconds % 60
+  return if (hours > 0) {
+    String.format(Locale.getDefault(), "%d:%02d:%02d", hours, minutes, seconds)
+  } else {
+    String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
   }
 }
 
@@ -395,13 +781,28 @@ private fun tileColor(role: Int): Color =
 
 @Preview(showBackground = true, backgroundColor = 0xFF181818)
 @Composable
-private fun KeycardPreview() {
+private fun SetupPreview() {
   CodenamesKeycardsTheme {
-    KeycardScreen(
-      settings = KeycardSettings(seed = 42L),
+    SetupScreen(
+      gameState = GameState(settings = KeycardSettings(seed = 42L)),
       onGenerate = {},
+      onStartGame = {},
       onSettingsChanged = {},
-      onFrozenChanged = {},
+      onTimerChanged = {},
+    )
+  }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF181818)
+@Composable
+private fun GamePreview() {
+  CodenamesKeycardsTheme {
+    GameScreen(
+      gameState = startGame(GameState(settings = KeycardSettings(seed = 42L))),
+      onAdvanceTurn = {},
+      onPause = {},
+      onResume = {},
+      onExit = {},
     )
   }
 }

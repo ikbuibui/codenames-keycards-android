@@ -1,1 +1,1 @@
-Generate and freeze offline keycards for your next game.
+Run offline Codenames games with saved boards, turn order, and timers.
