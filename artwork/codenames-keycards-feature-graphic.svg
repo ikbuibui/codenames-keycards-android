@@ -17,8 +17,8 @@
   <rect x="674" y="82" width="266" height="290" rx="24" fill="#AB8870"/>
   <rect x="693" y="101" width="228" height="252" rx="12" fill="#242626"/>
   <g>
-    <path d="M704 118h34v34h-34z" fill="#288DC9"/><path d="M747 118h34v34h-34z" fill="#D7C69F"/><path d="M790 118h34v34h-34z" fill="#B33038"/><path d="M833 118h34v34h-34z" fill="#D7C69F"/><path d="M876 118h34v34h-34z" fill="#2A9034"/>
-    <path d="M704 161h34v34h-34z" fill="#D7C69F"/><path d="M747 161h34v34h-34z" fill="#288DC9"/><path d="M790 161h34v34h-34z" fill="#B33038"/><path d="M833 161h34v34h-34z" fill="#DA781F"/><path d="M876 161h34v34h-34z" fill="#D7C69F"/>
+    <path d="M704 118h34v34h-34z" fill="#288DC9"/><path d="M747 118h34v34h-34z" fill="#DA781F"/><path d="M790 118h34v34h-34z" fill="#B33038"/><path d="M833 118h34v34h-34z" fill="#DA781F"/><path d="M876 118h34v34h-34z" fill="#2A9034"/>
+    <path d="M704 161h34v34h-34z" fill="#D7C69F"/><path d="M747 161h34v34h-34z" fill="#288DC9"/><path d="M790 161h34v34h-34z" fill="#B33038"/><path d="M833 161h34v34h-34z" fill="#DA781F"/><path d="M876 161h34v34h-34z" fill="#2A9034"/>
     <path d="M704 204h34v34h-34z" fill="#2A9034"/><path d="M747 204h34v34h-34z" fill="#288DC9"/><path d="M790 204h34v34h-34z" fill="#111615"/><path d="M833 204h34v34h-34z" fill="#B33038"/><path d="M876 204h34v34h-34z" fill="#DA781F"/>
     <path d="M704 247h34v34h-34z" fill="#D7C69F"/><path d="M747 247h34v34h-34z" fill="#2A9034"/><path d="M790 247h34v34h-34z" fill="#B33038"/><path d="M833 247h34v34h-34z" fill="#288DC9"/><path d="M876 247h34v34h-34z" fill="#D7C69F"/>
     <path d="M704 290h34v34h-34z" fill="#DA781F"/><path d="M747 290h34v34h-34z" fill="#288DC9"/><path d="M790 290h34v34h-34z" fill="#D7C69F"/><path d="M833 290h34v34h-34z" fill="#2A9034"/><path d="M876 290h34v34h-34z" fill="#B33038"/>

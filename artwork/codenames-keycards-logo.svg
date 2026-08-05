@@ -13,10 +13,10 @@
   <rect x="24" y="23" width="60" height="60" rx="7" fill="#AB8870"/>
   <rect x="27" y="26" width="54" height="54" rx="4" fill="#242626"/>
 
-  <!-- Five-by-five code grid: team colors, neutral bystanders, and one assassin. -->
+  <!-- Five tiles per team, four neutral bystanders, and one assassin. -->
   <g>
-    <path d="M30 29h8v8h-8z" fill="#288DC9"/><path d="M40 29h8v8h-8z" fill="#D7C69F"/><path d="M50 29h8v8h-8z" fill="#B33038"/><path d="M60 29h8v8h-8z" fill="#D7C69F"/><path d="M70 29h8v8h-8z" fill="#2A9034"/>
-    <path d="M30 39h8v8h-8z" fill="#D7C69F"/><path d="M40 39h8v8h-8z" fill="#288DC9"/><path d="M50 39h8v8h-8z" fill="#B33038"/><path d="M60 39h8v8h-8z" fill="#DA781F"/><path d="M70 39h8v8h-8z" fill="#D7C69F"/>
+    <path d="M30 29h8v8h-8z" fill="#288DC9"/><path d="M40 29h8v8h-8z" fill="#DA781F"/><path d="M50 29h8v8h-8z" fill="#B33038"/><path d="M60 29h8v8h-8z" fill="#DA781F"/><path d="M70 29h8v8h-8z" fill="#2A9034"/>
+    <path d="M30 39h8v8h-8z" fill="#D7C69F"/><path d="M40 39h8v8h-8z" fill="#288DC9"/><path d="M50 39h8v8h-8z" fill="#B33038"/><path d="M60 39h8v8h-8z" fill="#DA781F"/><path d="M70 39h8v8h-8z" fill="#2A9034"/>
     <path d="M30 49h8v8h-8z" fill="#2A9034"/><path d="M40 49h8v8h-8z" fill="#288DC9"/><path d="M50 49h8v8h-8z" fill="#111615"/><path d="M60 49h8v8h-8z" fill="#B33038"/><path d="M70 49h8v8h-8z" fill="#DA781F"/>
     <path d="M30 59h8v8h-8z" fill="#D7C69F"/><path d="M40 59h8v8h-8z" fill="#2A9034"/><path d="M50 59h8v8h-8z" fill="#B33038"/><path d="M60 59h8v8h-8z" fill="#288DC9"/><path d="M70 59h8v8h-8z" fill="#D7C69F"/>
     <path d="M30 69h8v8h-8z" fill="#DA781F"/><path d="M40 69h8v8h-8z" fill="#288DC9"/><path d="M50 69h8v8h-8z" fill="#D7C69F"/><path d="M60 69h8v8h-8z" fill="#2A9034"/><path d="M70 69h8v8h-8z" fill="#B33038"/>
