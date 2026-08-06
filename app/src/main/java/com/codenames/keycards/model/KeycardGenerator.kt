@@ -16,6 +16,7 @@ data class KeycardSettings(
   val tilesPerTeam: Int = 8,
   val turnOrder: List<Int> = listOf(1, 2),
   val firstTeamBonus: Boolean = true,
+  val assassinCount: Int = 1,
 ) {
   val tileCount: Int get() = boardRows * boardColumns
 }
@@ -38,7 +39,7 @@ internal fun generateKeycard(settings: KeycardSettings, nextInt: (Int) -> Int): 
       repeat(settings.tilesPerTeam) { add(team + 1) }
     }
     if (settings.firstTeamBonus) add(settings.turnOrder.first())
-    add(TileRole.ASSASSIN)
+    repeat(settings.assassinCount) { add(TileRole.ASSASSIN) }
     while (size < settings.tileCount) add(TileRole.BYSTANDER)
   }.toMutableList()
 
@@ -58,16 +59,17 @@ object TileRole {
   const val BYSTANDER = 0
 }
 
-fun requiredTiles(teamCount: Int, tilesPerTeam: Int, firstTeamBonus: Boolean): Int =
-  teamCount * tilesPerTeam + 1 + if (firstTeamBonus) 1 else 0
+fun requiredTiles(teamCount: Int, tilesPerTeam: Int, firstTeamBonus: Boolean, assassinCount: Int = 1): Int =
+  teamCount * tilesPerTeam + assassinCount + if (firstTeamBonus) 1 else 0
 
 fun maximumTilesPerTeam(
   boardRows: Int,
   boardColumns: Int,
   teamCount: Int,
   firstTeamBonus: Boolean,
+  assassinCount: Int = 1,
 ): Int =
-  ((boardRows * boardColumns - fixedTileCount(firstTeamBonus)) / teamCount)
+  ((boardRows * boardColumns - fixedTileCount(firstTeamBonus, assassinCount)) / teamCount)
     .coerceAtLeast(1)
 
 fun maximumTeamCount(
@@ -75,9 +77,20 @@ fun maximumTeamCount(
   boardColumns: Int,
   tilesPerTeam: Int,
   firstTeamBonus: Boolean,
+  assassinCount: Int = 1,
 ): Int =
-  ((boardRows * boardColumns - fixedTileCount(firstTeamBonus)) / tilesPerTeam)
+  ((boardRows * boardColumns - fixedTileCount(firstTeamBonus, assassinCount)) / tilesPerTeam)
     .coerceIn(MIN_TEAM_COUNT, MAX_TEAM_COUNT)
+
+fun maximumAssassinCount(
+  boardRows: Int,
+  boardColumns: Int,
+  teamCount: Int,
+  tilesPerTeam: Int,
+  firstTeamBonus: Boolean,
+): Int =
+  (boardRows * boardColumns - teamCount * tilesPerTeam - (if (firstTeamBonus) 1 else 0))
+    .coerceAtLeast(0)
 
 /** Makes changed or persisted settings valid while retaining as much as possible. */
 fun normalized(settings: KeycardSettings): KeycardSettings {
@@ -88,14 +101,16 @@ fun normalized(settings: KeycardSettings): KeycardSettings {
   val squareDimension = maxOf(requestedRows, requestedColumns)
   val boardRows = if (settings.linkBoardDimensions) squareDimension else requestedRows
   val boardColumns = if (settings.linkBoardDimensions) squareDimension else requestedColumns
-  val availableTeamTiles = boardRows * boardColumns - fixedTileCount(settings.firstTeamBonus)
+  val fixedForAssassinsAndBonus = settings.assassinCount.coerceAtLeast(0) + if (settings.firstTeamBonus) 1 else 0
+  val availableTeamTiles = boardRows * boardColumns - fixedForAssassinsAndBonus
   // A 2x2 grid always has room for the minimum two teams with one tile each.
   val teamCount =
     settings.teamCount
       .coerceIn(MIN_TEAM_COUNT, MAX_TEAM_COUNT)
-      .coerceAtMost(availableTeamTiles)
-  val maxTiles = availableTeamTiles / teamCount
+      .coerceAtMost(availableTeamTiles.coerceAtLeast(0))
+  val maxTiles = ((boardRows * boardColumns - fixedForAssassinsAndBonus) / teamCount).coerceAtLeast(1)
   val turnOrder = normalizeTurnOrder(settings.turnOrder, teamCount)
+  val maxAssassins = maximumAssassinCount(boardRows, boardColumns, teamCount, settings.tilesPerTeam.coerceIn(1, maxTiles), settings.firstTeamBonus)
 
   return settings.copy(
     teamCount = teamCount,
@@ -103,6 +118,7 @@ fun normalized(settings: KeycardSettings): KeycardSettings {
     boardColumns = boardColumns,
     tilesPerTeam = settings.tilesPerTeam.coerceIn(1, maxTiles),
     turnOrder = turnOrder,
+    assassinCount = settings.assassinCount.coerceIn(0, maxAssassins),
   )
 }
 
@@ -137,8 +153,8 @@ fun isValidKeycard(card: List<Int>, settings: KeycardSettings): Boolean {
     }
   }
 
-  return assassins == 1 &&
-    bystanders == settings.tileCount - requiredTiles(settings.teamCount, settings.tilesPerTeam, settings.firstTeamBonus) &&
+  return assassins == settings.assassinCount &&
+    bystanders == settings.tileCount - requiredTiles(settings.teamCount, settings.tilesPerTeam, settings.firstTeamBonus, settings.assassinCount) &&
     (1..settings.teamCount).all { actualTeamCounts[it] == expectedTeamCounts[it] }
 }
 
@@ -148,9 +164,10 @@ private fun validate(settings: KeycardSettings) {
   require(settings.boardColumns in MIN_BOARD_DIMENSION..MAX_BOARD_DIMENSION)
   require(settings.tilesPerTeam >= 1)
   require(settings.turnOrder.sorted() == (1..settings.teamCount).toList())
-  require(requiredTiles(settings.teamCount, settings.tilesPerTeam, settings.firstTeamBonus) <= settings.tileCount)
+  require(settings.assassinCount >= 0)
+  require(requiredTiles(settings.teamCount, settings.tilesPerTeam, settings.firstTeamBonus, settings.assassinCount) <= settings.tileCount)
 }
 
-private fun fixedTileCount(firstTeamBonus: Boolean): Int = 1 + if (firstTeamBonus) 1 else 0
+private fun fixedTileCount(firstTeamBonus: Boolean, assassinCount: Int): Int = assassinCount + if (firstTeamBonus) 1 else 0
 
 private val secureRandom by lazy(::SecureRandom)

@@ -15,6 +15,7 @@ class KeycardGeneratorTest {
     assertEquals(8, card.count { it == 2 })
     assertEquals(1, card.count { it == TileRole.ASSASSIN })
     assertEquals(7, card.count { it == TileRole.BYSTANDER })
+    assertTrue(isValidKeycard(card, KeycardSettings()))
   }
 
   @Test
@@ -26,6 +27,7 @@ class KeycardGeneratorTest {
         boardColumns = 6,
         tilesPerTeam = 5,
         turnOrder = listOf(2, 3, 1),
+        assassinCount = 2,
       )
     val card = generateKeycard(settings)
 
@@ -33,8 +35,8 @@ class KeycardGeneratorTest {
     assertEquals(5, card.count { it == 1 })
     assertEquals(6, card.count { it == 2 })
     assertEquals(5, card.count { it == 3 })
-    assertEquals(1, card.count { it == TileRole.ASSASSIN })
-    assertEquals(7, card.count { it == TileRole.BYSTANDER })
+    assertEquals(2, card.count { it == TileRole.ASSASSIN })
+    assertEquals(6, card.count { it == TileRole.BYSTANDER })
     assertTrue(isValidKeycard(card, settings))
   }
 
@@ -132,6 +134,48 @@ class KeycardGeneratorTest {
     val result = normalized(KeycardSettings(teamCount = 3, turnOrder = listOf(4, 2, 2)))
 
     assertEquals(listOf(2, 1, 3), result.turnOrder)
+  }
+
+  @Test
+  fun multipleAssassins_producesTheConfiguredCount() {
+    val card = generateKeycard(KeycardSettings(assassinCount = 3, boardRows = 5, boardColumns = 5, tilesPerTeam = 7))
+
+    assertEquals(25, card.size)
+    assertEquals(3, card.count { it == TileRole.ASSASSIN })
+    assertEquals(7, card.count { it == 1 })
+    assertEquals(7, card.count { it == 2 })
+    // 25 - 7 - 7 - 1(first bonus) - 3 = 7
+    assertEquals(7, card.count { it == TileRole.BYSTANDER })
+    assertTrue(isValidKeycard(card, KeycardSettings(assassinCount = 3, boardRows = 5, boardColumns = 5, tilesPerTeam = 7)))
+  }
+
+  @Test
+  fun zeroAssassins_producesNoAssassinTiles() {
+    val card = generateKeycard(KeycardSettings(assassinCount = 0, boardRows = 5, boardColumns = 5, tilesPerTeam = 8))
+
+    assertEquals(25, card.size)
+    assertEquals(0, card.count { it == TileRole.ASSASSIN })
+    assertEquals(9, card.count { it == 1 }) // 8 + first-team bonus
+    assertEquals(8, card.count { it == 2 })
+    assertEquals(8, card.count { it == TileRole.BYSTANDER })
+    assertTrue(isValidKeycard(card, KeycardSettings(assassinCount = 0, boardRows = 5, boardColumns = 5, tilesPerTeam = 8)))
+  }
+
+  @Test
+  fun normalize_capsAssassinsAtAvailableSpace() {
+    val result =
+      normalized(
+        KeycardSettings(
+          assassinCount = 99,
+          boardRows = 5,
+          boardColumns = 5,
+          teamCount = 2,
+          tilesPerTeam = 8,
+        ),
+      )
+
+    // 25 tiles - 2*8 team tiles - 1 bonus = 8 max assassins
+    assertEquals(8, result.assassinCount)
   }
 
   @Test

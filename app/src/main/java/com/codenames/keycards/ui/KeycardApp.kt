@@ -98,6 +98,7 @@ import com.codenames.keycards.model.remainingTargetCellIndices
 import com.codenames.keycards.model.shuffleActiveTargetOrder
 import com.codenames.keycards.model.targetDisplayOrder
 import com.codenames.keycards.model.undoTargetGuessed
+import com.codenames.keycards.model.maximumAssassinCount
 import com.codenames.keycards.model.maximumTeamCount
 import com.codenames.keycards.model.maximumTilesPerTeam
 import com.codenames.keycards.model.normalized
@@ -439,6 +440,7 @@ private fun SettingsPanel(
       settings.teamCount,
       settings.tilesPerTeam,
       settings.firstTeamBonus,
+      settings.assassinCount,
     )
   val maxTiles =
     maximumTilesPerTeam(
@@ -446,11 +448,21 @@ private fun SettingsPanel(
       settings.boardColumns,
       settings.teamCount,
       settings.firstTeamBonus,
+      settings.assassinCount,
     )
   val maxTeams =
     maximumTeamCount(
       settings.boardRows,
       settings.boardColumns,
+      settings.tilesPerTeam,
+      settings.firstTeamBonus,
+      settings.assassinCount,
+    )
+  val maxAssassins =
+    maximumAssassinCount(
+      settings.boardRows,
+      settings.boardColumns,
+      settings.teamCount,
       settings.tilesPerTeam,
       settings.firstTeamBonus,
     )
@@ -488,6 +500,14 @@ private fun SettingsPanel(
         increaseEnabled = settings.teamCount < maxTeams,
         onDecrease = { onSettingsChanged { it.copy(teamCount = it.teamCount - 1) } },
         onIncrease = { onSettingsChanged { it.copy(teamCount = it.teamCount + 1) } },
+      )
+      SettingStepper(
+        title = "Assassins",
+        value = settings.assassinCount,
+        decreaseEnabled = settings.assassinCount > 0,
+        increaseEnabled = settings.assassinCount < maxAssassins,
+        onDecrease = { onSettingsChanged { it.copy(assassinCount = it.assassinCount - 1) } },
+        onIncrease = { onSettingsChanged { it.copy(assassinCount = it.assassinCount + 1) } },
       )
       TurnOrderEditor(
         turnOrder = settings.turnOrder,

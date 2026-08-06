@@ -38,6 +38,7 @@ class GameStateStore(context: Context) {
       putInt(KEY_TILES_PER_TEAM, snapshot.tilesPerTeam)
       putString(KEY_TURN_ORDER, snapshot.turnOrder.joinToString(separator = ","))
       putBoolean(KEY_FIRST_TEAM_BONUS, snapshot.firstTeamBonus)
+      putInt(KEY_ASSASSIN_COUNT, snapshot.assassinCount)
       putString(KEY_KEYCARD, snapshot.keycard.joinToString(separator = ","))
       putBoolean(KEY_HAS_TIMER, snapshot.timerDurationSeconds != null)
       putInt(KEY_TIMER_DURATION_SECONDS, snapshot.timerDurationSeconds ?: 0)
@@ -62,6 +63,7 @@ class GameStateStore(context: Context) {
       tilesPerTeam = preferences.getInt(KEY_TILES_PER_TEAM, DEFAULT_TILES_PER_TEAM),
       turnOrder = preferences.getString(KEY_TURN_ORDER, null).toIntList(),
       firstTeamBonus = preferences.getBoolean(KEY_FIRST_TEAM_BONUS, true),
+      assassinCount = preferences.getInt(KEY_ASSASSIN_COUNT, 1),
       keycard = preferences.getString(KEY_KEYCARD, null).toIntList(),
       timerDurationSeconds = preferences.getInt(KEY_TIMER_DURATION_SECONDS, 0).takeIf {
         preferences.getBoolean(KEY_HAS_TIMER, false) && it > 0
@@ -145,6 +147,7 @@ class GameStateStore(context: Context) {
     const val KEY_TILES_PER_TEAM = "tiles_per_team"
     const val KEY_TURN_ORDER = "turn_order"
     const val KEY_FIRST_TEAM_BONUS = "first_team_bonus"
+    const val KEY_ASSASSIN_COUNT = "assassin_count"
     const val KEY_KEYCARD = "keycard"
     const val KEY_HAS_TIMER = "has_timer"
     const val KEY_TIMER_DURATION_SECONDS = "timer_duration_seconds"
