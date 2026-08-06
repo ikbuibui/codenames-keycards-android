@@ -24,8 +24,9 @@ android {
     applicationId = "com.codenames.keycards"
     minSdk = 24
     targetSdk = 36
-    versionCode = 3
-    versionName = "3.0"
+    versionCode = 4
+    versionName = "4.0"
+    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
   signingConfigs {
@@ -62,6 +63,15 @@ android {
   packaging {
     resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
   }
+  splits {
+    abi {
+      isEnable = true
+      reset()
+      include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+      isUniversalApk = true
+    }
+  }
+  sourceSets.getByName("androidTest").assets.directories.add("src/test/resources")
 }
 
 kotlin {
@@ -75,8 +85,18 @@ dependencies {
   implementation(libs.androidx.compose.ui)
   implementation(libs.androidx.compose.ui.tooling.preview)
   implementation(libs.androidx.compose.material3)
+  implementation(libs.androidx.camera.core)
+  implementation(libs.androidx.camera.camera2)
+  implementation(libs.androidx.camera.lifecycle)
+  implementation(libs.androidx.camera.view)
+  implementation(libs.androidx.lifecycle.viewmodel.compose)
+  implementation(libs.androidx.exifinterface)
+  implementation(libs.opencv)
+  implementation(libs.tesseract4android)
 
   debugImplementation(libs.androidx.compose.ui.tooling)
   debugImplementation(libs.androidx.compose.ui.test.manifest)
   testImplementation(libs.junit)
+  androidTestImplementation(libs.androidx.test.ext.junit)
+  androidTestImplementation(libs.androidx.test.runner)
 }

@@ -1,1 +1,1 @@
-Generate offline keycards and run a timed Codenames game.
+Generate offline keycards, scan word cards, and run Codenames games.

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "fixtures": [
+    {
+      "file": "official-5x5.jpg",
+      "rows": 5,
+      "columns": 5,
+      "cells": [
+        "STEEL", "MERMAID", "BRICK", "UNIVERSITY", "CLOCK",
+        "EINSTEIN", "CAMP", "POLISH", "WHEELCHAIR", "MASK",
+        "STREET", "DIRECTOR", "COAST", "GOLDILOCKS", "SMOKE",
+        "EDEN", "RADIO", "NEWTON", "SAHARA", "GUITAR",
+        "BABY", "LOVE", "MIRROR", "BATH", "RAM"
+      ]
+    },
+    {
+      "file": "official-4x6.jpg",
+      "rows": 4,
+      "columns": 6,
+      "cells": [
+        "STEEL", "MERMAID", "BRICK", "UNIVERSITY", "CLOCK", "BABY",
+        "EINSTEIN", "CAMP", "POLISH", "WHEELCHAIR", "MASK", "BATH",
+        "STREET", "DIRECTOR", "COAST", "GOLDILOCKS", "SMOKE", "MIRROR",
+        "EDEN", "RADIO", "NEWTON", "SAHARA", "GUITAR", "RAM"
+      ]
+    }
+  ]
+}

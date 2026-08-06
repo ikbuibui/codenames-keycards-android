@@ -16,6 +16,12 @@ data class GameState(
   val activeTeam: Int = 1,
   val remainingSeconds: Int? = null,
   val isPaused: Boolean = true,
+  /** Present only after an explicitly reviewed, dimension-verified word scan. */
+  val recognizedBoard: RecognizedBoard? = null,
+  /** Stable keycard indices, rather than displayed strings. */
+  val guessedCellIndices: Set<Int> = emptySet(),
+  /** One complete target-index permutation for every team with words. */
+  val targetDisplayOrders: Map<Int, List<Int>> = emptyMap(),
 ) {
   val isRunning: Boolean get() = gameMode && !isPaused
 }
@@ -35,6 +41,9 @@ data class GameStateSnapshot(
   val activeTeam: Int,
   val remainingSeconds: Int?,
   val isPaused: Boolean,
+  val recognizedBoard: RecognizedBoard? = null,
+  val guessedCellIndices: Set<Int> = emptySet(),
+  val targetDisplayOrders: Map<Int, List<Int>> = emptyMap(),
 )
 
 fun GameState.toSnapshot(): GameStateSnapshot =
@@ -52,6 +61,9 @@ fun GameState.toSnapshot(): GameStateSnapshot =
     activeTeam = activeTeam,
     remainingSeconds = remainingSeconds,
     isPaused = isPaused,
+    recognizedBoard = recognizedBoard,
+    guessedCellIndices = guessedCellIndices,
+    targetDisplayOrders = targetDisplayOrders,
   )
 
 fun GameStateSnapshot.toGameState(): GameState =
@@ -72,19 +84,38 @@ fun GameStateSnapshot.toGameState(): GameState =
       activeTeam = activeTeam,
       remainingSeconds = remainingSeconds,
       isPaused = isPaused,
+      recognizedBoard = recognizedBoard,
+      guessedCellIndices = guessedCellIndices,
+      targetDisplayOrders = targetDisplayOrders,
     ),
   )
 
 /** Repairs corrupt or old saved values while retaining as much game state as possible. */
 fun normalizedGameState(state: GameState): GameState {
   val settings = normalized(state.settings)
-  val keycard = state.keycard.takeIf { isValidKeycard(it, settings) } ?: generateKeycard(settings)
+  val suppliedKeycardIsValid = isValidKeycard(state.keycard, settings)
+  val keycard = state.keycard.takeIf { suppliedKeycardIsValid } ?: generateKeycard(settings)
   val duration = state.timer.durationSeconds?.takeIf { it > 0 }
   val timer = TurnTimer(duration)
   val activeTeam = state.activeTeam.takeIf { it in settings.turnOrder } ?: settings.turnOrder.first()
   val remainingSeconds = duration?.let { configuredDuration ->
     (state.remainingSeconds ?: configuredDuration).coerceIn(0, configuredDuration)
   }
+  val recognizedBoard = state.recognizedBoard?.takeIf { it.isValidFor(settings) }
+  val guessed =
+    if (recognizedBoard == null) {
+      emptySet()
+    } else {
+      state.guessedCellIndices.filterTo(linkedSetOf()) { index ->
+        index in keycard.indices && keycard[index] in settings.turnOrder
+      }
+    }
+  val displayOrders =
+    if (recognizedBoard == null) {
+      emptyMap()
+    } else {
+      normalizeTargetDisplayOrders(state.targetDisplayOrders, keycard, settings)
+    }
 
   return state.copy(
     settings = settings,
@@ -93,6 +124,9 @@ fun normalizedGameState(state: GameState): GameState {
     activeTeam = activeTeam,
     remainingSeconds = remainingSeconds,
     isPaused = if (state.gameMode) state.isPaused else true,
+    recognizedBoard = recognizedBoard,
+    guessedCellIndices = guessed,
+    targetDisplayOrders = displayOrders,
   )
 }
 
@@ -102,14 +136,25 @@ fun restoreAfterRestart(state: GameState): GameState {
   return if (normalized.gameMode) normalized.copy(isPaused = true) else normalized
 }
 
-/** Begins a new game from the first team in the configured order. */
-fun startGame(state: GameState): GameState {
+/** Begins a new game and creates a stable, independently shuffled order for every team. */
+fun startGame(state: GameState, random: BoundedRandom = DefaultBoundedRandom): GameState {
   val normalized = normalizedGameState(state)
+  val displayOrders =
+    if (normalized.recognizedBoard == null) {
+      emptyMap()
+    } else {
+      normalized.settings.turnOrder.associateWith { team ->
+        fisherYates(normalized.keycard.indices.filter { normalized.keycard[it] == team }, random)
+      }
+    }
   return normalized.copy(
     gameMode = true,
     activeTeam = normalized.settings.turnOrder.first(),
     remainingSeconds = normalized.timer.durationSeconds,
     isPaused = false,
+    // A newly started game is a new set of guesses, even when its reviewed board is reused.
+    guessedCellIndices = emptySet(),
+    targetDisplayOrders = displayOrders,
   )
 }
 
@@ -141,5 +186,53 @@ fun tickTimer(state: GameState): GameState {
   if (!normalized.isRunning || remaining == 0) return normalized
   return normalized.copy(remainingSeconds = remaining - 1)
 }
+
+/** Replaces words only after review; existing positional orders remain meaningful. */
+fun attachRecognizedBoard(state: GameState, board: RecognizedBoard): GameState {
+  val normalized = normalizedGameState(state)
+  require(board.isValidFor(normalized.settings)) { "Word-board dimensions must match the keycard" }
+  require(board.isComplete) { "Every reviewed word-board cell must be nonblank" }
+  return normalizedGameState(normalized.copy(recognizedBoard = board))
+}
+
+/** Generates a replacement keycard and clears every position-dependent word-game value. */
+fun generateNewKeycard(state: GameState): GameState {
+  val normalized = normalizedGameState(state)
+  return normalized.copy(
+    keycard = generateKeycard(normalized.settings),
+    recognizedBoard = null,
+    guessedCellIndices = emptySet(),
+    targetDisplayOrders = emptyMap(),
+  )
+}
+
+/** Removes all data whose position-to-word interpretation is no longer valid. */
+fun clearRecognizedBoard(state: GameState): GameState =
+  normalizedGameState(state).copy(
+    recognizedBoard = null,
+    guessedCellIndices = emptySet(),
+    targetDisplayOrders = emptyMap(),
+  )
+
+private fun RecognizedBoard.isValidFor(settings: KeycardSettings): Boolean =
+  rows == settings.boardRows &&
+    columns == settings.boardColumns &&
+    cells.size == rows * columns &&
+    cells.all { cell -> cell.confidence == null || cell.confidence in 0..100 }
+
+private fun normalizeTargetDisplayOrders(
+  orders: Map<Int, List<Int>>,
+  keycard: List<Int>,
+  settings: KeycardSettings,
+): Map<Int, List<Int>> =
+  settings.turnOrder.associateWith { team ->
+    val targetIndices = keycard.indices.filter { keycard[it] == team }
+    val saved = orders[team]
+    if (saved != null && saved.size == targetIndices.size && saved.toSet() == targetIndices.toSet()) {
+      saved.toList()
+    } else {
+      targetIndices
+    }
+  }
 
 private fun Int.floorMod(modulus: Int): Int = ((this % modulus) + modulus) % modulus

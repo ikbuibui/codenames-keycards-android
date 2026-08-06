@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -52,6 +55,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +69,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -81,8 +86,18 @@ import com.codenames.keycards.model.MIN_BOARD_DIMENSION
 import com.codenames.keycards.model.TurnTimer
 import com.codenames.keycards.model.TileRole
 import com.codenames.keycards.model.advanceTurn
+import com.codenames.keycards.model.attachRecognizedBoard
+import com.codenames.keycards.model.canShuffleTargets
+import com.codenames.keycards.model.clearRecognizedBoard
 import com.codenames.keycards.model.exitToSetup
+import com.codenames.keycards.model.generateNewKeycard
 import com.codenames.keycards.model.generateKeycard
+import com.codenames.keycards.model.isValidKeycard
+import com.codenames.keycards.model.markActiveTargetGuessed
+import com.codenames.keycards.model.remainingTargetCellIndices
+import com.codenames.keycards.model.shuffleActiveTargetOrder
+import com.codenames.keycards.model.targetDisplayOrder
+import com.codenames.keycards.model.undoTargetGuessed
 import com.codenames.keycards.model.maximumTeamCount
 import com.codenames.keycards.model.maximumTilesPerTeam
 import com.codenames.keycards.model.normalized
@@ -93,6 +108,7 @@ import com.codenames.keycards.model.resumeGame
 import com.codenames.keycards.model.startGame
 import com.codenames.keycards.model.tickTimer
 import com.codenames.keycards.theme.CodenamesKeycardsTheme
+import com.codenames.keycards.ui.scan.ScanWordBoardFlow
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -121,6 +137,7 @@ fun KeycardApp() {
   val appContext = LocalContext.current.applicationContext
   val gameStateStore = remember(appContext) { GameStateStore(appContext) }
   var gameState by remember { mutableStateOf(gameStateStore.load()) }
+  var showingScan by rememberSaveable { mutableStateOf(false) }
 
   fun updateState(change: (GameState) -> GameState) {
     gameState = normalizedGameState(change(gameState))
@@ -128,7 +145,25 @@ fun KeycardApp() {
   }
 
   fun updateSettings(change: (KeycardSettings) -> KeycardSettings) {
-    updateState { state -> state.copy(settings = normalized(change(state.settings))) }
+    updateState { state ->
+      val updatedSettings = normalized(change(state.settings))
+      val candidate = state.copy(settings = updatedSettings)
+      val dimensionsChanged =
+        state.settings.boardRows != updatedSettings.boardRows ||
+          state.settings.boardColumns != updatedSettings.boardColumns
+      // A generated replacement keycard or a changed grid invalidates every positional word map.
+      if (dimensionsChanged) {
+        clearRecognizedBoard(candidate)
+      } else if (!isValidKeycard(candidate.keycard, candidate.settings)) {
+        candidate.copy(
+          keycard = generateKeycard(candidate.settings),
+          guessedCellIndices = emptySet(),
+          targetDisplayOrders = emptyMap(),
+        )
+      } else {
+        candidate
+      }
+    }
   }
 
   KeepScreenOn(keepScreenOn = gameState.isRunning)
@@ -144,10 +179,25 @@ fun KeycardApp() {
     }
   }
 
-  if (gameState.gameMode) {
+  if (showingScan) {
+    ScanWordBoardFlow(
+      settings = gameState.settings,
+      onUseWordBoard = { board ->
+        updateState { attachRecognizedBoard(it, board) }
+        showingScan = false
+      },
+      onUpdateBoardSize = { rows, columns ->
+        updateSettings { it.copy(boardRows = rows, boardColumns = columns, linkBoardDimensions = false) }
+      },
+      onDismiss = { showingScan = false },
+    )
+  } else if (gameState.gameMode) {
     GameScreen(
       gameState = gameState,
       onAdvanceTurn = { updateState(::advanceTurn) },
+      onShuffleWords = { updateState(::shuffleActiveTargetOrder) },
+      onGuessTarget = { index -> updateState { markActiveTargetGuessed(it, index) } },
+      onUndoTarget = { index -> updateState { undoTargetGuessed(it, index) } },
       onPause = { updateState(::pauseGame) },
       onResume = { updateState(::resumeGame) },
       onExit = { updateState(::exitToSetup) },
@@ -155,10 +205,9 @@ fun KeycardApp() {
   } else {
     SetupScreen(
       gameState = gameState,
-      onGenerate = {
-        updateState { state -> state.copy(keycard = generateKeycard(state.settings)) }
-      },
+      onGenerate = { updateState(::generateNewKeycard) },
       onStartGame = { updateState(::startGame) },
+      onScanWords = { showingScan = true },
       onSettingsChanged = ::updateSettings,
       onTimerChanged = { timer -> updateState { state -> state.copy(timer = timer) } },
     )
@@ -197,6 +246,7 @@ private fun SetupScreen(
   gameState: GameState,
   onGenerate: () -> Unit,
   onStartGame: () -> Unit,
+  onScanWords: () -> Unit,
   onSettingsChanged: ((KeycardSettings) -> KeycardSettings) -> Unit,
   onTimerChanged: (TurnTimer) -> Unit,
 ) {
@@ -219,7 +269,12 @@ private fun SetupScreen(
     ) {
       Header()
       KeycardBoard(board = gameState.keycard, settings = settings)
-      BoardActions(onGenerate = onGenerate, onStartGame = onStartGame)
+      BoardActions(
+        recognizedBoard = gameState.recognizedBoard,
+        onGenerate = onGenerate,
+        onStartGame = onStartGame,
+        onScanWords = onScanWords,
+      )
       SettingsPanel(
         settings = settings,
         timer = gameState.timer,
@@ -255,9 +310,11 @@ private fun KeycardBoard(
   board: List<Int>,
   settings: KeycardSettings,
   modifier: Modifier = Modifier,
+  outlineColor: Color? = null,
 ) {
   val firstTeam = settings.turnOrder.firstOrNull()
-  val borderColor = firstTeam?.let(::teamFor)?.color ?: WoodLight
+  val borderColor = outlineColor ?: firstTeam?.let(::teamFor)?.color ?: WoodLight
+  val hasColoredOutline = outlineColor != null || firstTeam != null
 
   BoxWithConstraints(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
     val gridAspectRatio = settings.boardColumns.toFloat() / settings.boardRows
@@ -281,7 +338,7 @@ private fun KeycardBoard(
           .aspectRatio(gridAspectRatio)
           .clip(RoundedCornerShape((30f * frameScale).dp))
           .background(borderColor)
-          .padding(if (firstTeam == null) 0.dp else (7f * frameScale).dp),
+          .padding(if (hasColoredOutline) (7f * frameScale).dp else 0.dp),
     ) {
       Box(
         modifier =
@@ -340,11 +397,30 @@ private fun KeycardTile(role: Int, symbolSize: androidx.compose.ui.unit.TextUnit
 }
 
 @Composable
-private fun BoardActions(onGenerate: () -> Unit, onStartGame: () -> Unit) {
+private fun BoardActions(
+  recognizedBoard: com.codenames.keycards.model.RecognizedBoard?,
+  onGenerate: () -> Unit,
+  onStartGame: () -> Unit,
+  onScanWords: () -> Unit,
+) {
   Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
     Button(onClick = onStartGame, modifier = Modifier.fillMaxWidth()) {
       Text("Start game")
     }
+    OutlinedButton(onClick = onScanWords, modifier = Modifier.fillMaxWidth()) {
+      Text("Scan word cards")
+    }
+    Text(
+      when {
+        recognizedBoard == null -> "No word board"
+        recognizedBoard.isComplete -> "${recognizedBoard.cells.size} words ready"
+        else -> "Scan needs review"
+      },
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+      modifier = Modifier.fillMaxWidth(),
+      textAlign = TextAlign.Center,
+    )
     OutlinedButton(onClick = onGenerate, modifier = Modifier.fillMaxWidth()) {
       Text("Generate new board")
     }
@@ -458,37 +534,6 @@ private fun BoardSizeSetting(
         label = { Text("${settings.boardRows} × ${settings.boardColumns}") },
       )
     }
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-      Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text("Link rows and columns", style = MaterialTheme.typography.titleSmall)
-        Text(
-          if (settings.linkBoardDimensions) {
-            "The board stays square when its size changes."
-          } else {
-            "Choose rows and columns independently."
-          },
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-      }
-      Switch(
-        checked = settings.linkBoardDimensions,
-        onCheckedChange = { linked ->
-          onSettingsChanged { current ->
-            if (linked) {
-              val dimension = maxOf(current.boardRows, current.boardColumns)
-              current.copy(
-                boardRows = dimension,
-                boardColumns = dimension,
-                linkBoardDimensions = true,
-              )
-            } else {
-              current.copy(linkBoardDimensions = false)
-            }
-          }
-        },
-      )
-    }
   }
 
   if (showBoardSizePicker) {
@@ -498,8 +543,8 @@ private fun BoardSizeSetting(
       linkedDimensions = settings.linkBoardDimensions,
       occupiedTiles = occupiedTiles,
       onDismiss = { showBoardSizePicker = false },
-      onBoardSizeSelected = { rows, columns ->
-        onSettingsChanged { it.copy(boardRows = rows, boardColumns = columns) }
+      onBoardSizeSelected = { rows, columns, linked ->
+        onSettingsChanged { it.copy(boardRows = rows, boardColumns = columns, linkBoardDimensions = linked) }
         showBoardSizePicker = false
       },
     )
@@ -513,18 +558,19 @@ private fun BoardSizePickerDialog(
   linkedDimensions: Boolean,
   occupiedTiles: Int,
   onDismiss: () -> Unit,
-  onBoardSizeSelected: (rows: Int, columns: Int) -> Unit,
+  onBoardSizeSelected: (rows: Int, columns: Int, linkBoardDimensions: Boolean) -> Unit,
 ) {
   var rows by remember(initialRows) { mutableIntStateOf(initialRows) }
   var columns by remember(initialColumns) { mutableIntStateOf(initialColumns) }
+  var linked by remember(linkedDimensions) { mutableStateOf(linkedDimensions) }
   val rowsRange =
-    if (linkedDimensions) {
+    if (linked) {
       minimumSquareDimension(occupiedTiles)..MAX_BOARD_DIMENSION
     } else {
       minimumDimension(occupiedTiles, columns)..MAX_BOARD_DIMENSION
     }
   val columnsRange =
-    if (linkedDimensions) {
+    if (linked) {
       minimumSquareDimension(occupiedTiles)..MAX_BOARD_DIMENSION
     } else {
       minimumDimension(occupiedTiles, rows)..MAX_BOARD_DIMENSION
@@ -534,33 +580,56 @@ private fun BoardSizePickerDialog(
     onDismissRequest = onDismiss,
     title = { Text("Board size") },
     text = {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-        RollingNumberPicker(
-          label = "Rows",
-          value = rows,
-          range = rowsRange,
-          onValueChanged = { value ->
-            rows = value
-            if (linkedDimensions) columns = value
-          },
-        )
-        RollingNumberPicker(
-          label = "Columns",
-          value = columns,
-          range = columnsRange,
-          onValueChanged = { value ->
-            columns = value
-            if (linkedDimensions) rows = value
-          },
-        )
+      Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceEvenly,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          RollingNumberPicker(
+            label = "Rows",
+            value = rows,
+            range = rowsRange,
+            onValueChanged = { value ->
+              rows = value
+              if (linked) columns = value
+            },
+          )
+          RollingNumberPicker(
+            label = "Columns",
+            value = columns,
+            range = columnsRange,
+            onValueChanged = { value ->
+              columns = value
+              if (linked) rows = value
+            },
+          )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+          Column(modifier = Modifier.weight(1f)) {
+            Text("Link rows and columns", style = MaterialTheme.typography.titleSmall)
+            Text(
+              if (linked) "The board stays square." else "Choose independently.",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
+          Switch(
+            checked = linked,
+            onCheckedChange = { checked ->
+              linked = checked
+              if (checked) {
+                val dimension = maxOf(rows, columns)
+                rows = dimension
+                columns = dimension
+              }
+            },
+          )
+        }
       }
     },
     confirmButton = {
-      TextButton(onClick = { onBoardSizeSelected(rows, columns) }) { Text("Set board") }
+      TextButton(onClick = { onBoardSizeSelected(rows, columns, linked) }) { Text("Set board") }
     },
     dismissButton = {
       TextButton(onClick = onDismiss) { Text("Cancel") }
@@ -818,6 +887,9 @@ private fun RollingNumberPicker(
 private fun GameScreen(
   gameState: GameState,
   onAdvanceTurn: () -> Unit,
+  onShuffleWords: () -> Unit,
+  onGuessTarget: (Int) -> Unit,
+  onUndoTarget: (Int) -> Unit,
   onPause: () -> Unit,
   onResume: () -> Unit,
   onExit: () -> Unit,
@@ -838,7 +910,7 @@ private fun GameScreen(
           Modifier
             .fillMaxWidth()
             .weight(1f)
-            .widthIn(max = 720.dp)
+            .widthIn(max = 900.dp)
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -850,11 +922,52 @@ private fun GameScreen(
           isPaused = gameState.isPaused,
           onAdvanceTurn = onAdvanceTurn,
         )
-        KeycardBoard(
-          board = gameState.keycard,
-          settings = settings,
-          modifier = Modifier.weight(1f),
-        )
+        if (gameState.recognizedBoard == null) {
+          KeycardBoard(
+            board = gameState.keycard,
+            settings = settings,
+            modifier = Modifier.weight(1f),
+            outlineColor = activeTeam.color,
+          )
+        } else {
+          BoxWithConstraints(modifier = Modifier.weight(1f)) {
+            if (maxWidth >= 700.dp) {
+              Row(
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+              ) {
+                KeycardBoard(
+                  board = gameState.keycard,
+                  settings = settings,
+                  modifier = Modifier.weight(1f),
+                  outlineColor = activeTeam.color,
+                )
+                TargetWordsPane(
+                  gameState = gameState,
+                  team = activeTeam,
+                  onShuffleWords = onShuffleWords,
+                  onGuessTarget = onGuessTarget,
+                  onUndoTarget = onUndoTarget,
+                  modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+                )
+              }
+            } else {
+              Column(
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+              ) {
+                KeycardBoard(board = gameState.keycard, settings = settings, outlineColor = activeTeam.color)
+                TargetWordsPane(
+                  gameState = gameState,
+                  team = activeTeam,
+                  onShuffleWords = onShuffleWords,
+                  onGuessTarget = onGuessTarget,
+                  onUndoTarget = onUndoTarget,
+                )
+              }
+            }
+          }
+        }
         OutlinedButton(
           onClick = {
             if (!gameState.isPaused) onPause()
@@ -894,6 +1007,94 @@ private fun GameScreen(
           Text("Exit to setup")
         }
       }
+    }
+  }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TargetWordsPane(
+  gameState: GameState,
+  team: TeamOption,
+  onShuffleWords: () -> Unit,
+  onGuessTarget: (Int) -> Unit,
+  onUndoTarget: (Int) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val board = gameState.recognizedBoard ?: return
+  val remaining = remainingTargetCellIndices(gameState)
+  val guessed = targetDisplayOrder(gameState, gameState.activeTeam).filter(gameState.guessedCellIndices::contains)
+  Card(
+    modifier = modifier.fillMaxWidth(),
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+  ) {
+    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+          Text("${team.symbol} ${team.name} targets", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = team.color)
+          Text("${remaining.size} remaining", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        TextButton(onClick = onShuffleWords, enabled = canShuffleTargets(gameState)) { Text("Shuffle words") }
+      }
+      if (remaining.isEmpty()) {
+        Text("No targets remaining.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+      }
+      FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        remaining.forEach { index ->
+          TargetWordButton(
+            text = board.cells[index].text,
+            color = team.color,
+            onClick = { onGuessTarget(index) },
+          )
+        }
+      }
+      if (guessed.isNotEmpty()) {
+        Text("Completed", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        FlowRow(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+          verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          guessed.forEach { index ->
+            TargetWordButton(
+              text = board.cells[index].text,
+              color = team.color,
+              isCompleted = true,
+              onClick = { onUndoTarget(index) },
+            )
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun TargetWordButton(text: String, color: Color, isCompleted: Boolean = false, onClick: () -> Unit) {
+  Surface(
+    onClick = onClick,
+    modifier = Modifier.heightIn(min = 48.dp),
+    shape = RoundedCornerShape(50),
+    color = if (isCompleted) MaterialTheme.colorScheme.surfaceVariant else color.copy(alpha = 0.15f),
+    contentColor = if (isCompleted) MaterialTheme.colorScheme.onSurfaceVariant else color,
+    tonalElevation = 2.dp,
+  ) {
+    Box(
+      modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+      contentAlignment = Alignment.Center,
+    ) {
+      Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 2,
+        textAlign = TextAlign.Center,
+        textDecoration = if (isCompleted) TextDecoration.LineThrough else TextDecoration.None,
+      )
     }
   }
 }
@@ -967,6 +1168,7 @@ private fun SetupPreview() {
       gameState = GameState(settings = KeycardSettings()),
       onGenerate = {},
       onStartGame = {},
+      onScanWords = {},
       onSettingsChanged = {},
       onTimerChanged = {},
     )
@@ -980,6 +1182,9 @@ private fun GamePreview() {
     GameScreen(
       gameState = startGame(GameState(settings = KeycardSettings())),
       onAdvanceTurn = {},
+      onShuffleWords = {},
+      onGuessTarget = {},
+      onUndoTarget = {},
       onPause = {},
       onResume = {},
       onExit = {},

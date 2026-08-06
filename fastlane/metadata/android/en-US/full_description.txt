@@ -9,11 +9,13 @@ FEATURES
 • Set the number of tiles for each team and drag teams into turn order.
 • Give only the first team an optional extra tile.
 • Choose No timer or set a turn duration with the system time picker.
+• Optionally scan a physical word-card board with the camera or system photo picker. The app tolerates imperfect human spacing while independently verifying every grid position, reads words locally, and lets you correct every word before use.
 • Run a focused game screen: tap the timer to advance, pause, resume, or return to setup.
+• When a reviewed word board is attached, use the cluegiver/spymaster view to see the full keycard with the active team's target words. Mark guesses, undo them, or shuffle a team's target list without changing the board.
 • Every keycard includes an assassin tile.
-• Save the board, setup, timer, and game progress automatically. Interrupted games restore paused.
+• Save the board, setup, timer, word board, and game progress automatically. Interrupted games restore paused.
 
 PRIVATE BY DESIGN
-Codenames Keycards has no network permission, ads, analytics SDKs, web view, remote API, or downloaded game data. Your saved board stays in the app's private storage on your device.
+Codenames Keycards has no network permission, ads, analytics SDKs, web view, remote API, or downloaded game data. Camera capture, photo-picker import, grid detection, and OCR happen entirely on your device; the source photo is not saved to your gallery or retained after scanning. The English OCR model is packaged with the app, so it does not need to be downloaded. Your saved board stays in the app's private storage on your device.
 
 Codenames Keycards is an independent, unofficial companion app and is not affiliated with or endorsed by Czech Games Edition.

@@ -1,0 +1,3 @@
+• Scan physical word-card boards in portrait or landscape, or use the system photo picker; robust card-grid verification and parallel OCR run entirely on your device.
+• Confirm board orientation, review only words needing attention by default, and edit any recognized word before use.
+• Use the new cluegiver/spymaster view to see team targets, mark guesses, undo, and shuffle target words.
