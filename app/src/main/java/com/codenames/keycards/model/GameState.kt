@@ -10,6 +10,7 @@ data class TurnTimer(val durationSeconds: Int? = null) {
 /** Everything needed to resume the setup or an in-progress game. */
 data class GameState(
   val settings: KeycardSettings = KeycardSettings(),
+  val keycard: List<Int> = generateKeycard(normalized(settings)),
   val timer: TurnTimer = TurnTimer(),
   val gameMode: Boolean = false,
   val activeTeam: Int = 1,
@@ -19,14 +20,16 @@ data class GameState(
   val isRunning: Boolean get() = gameMode && !isPaused
 }
 
-/** The primitive representation written by the private preferences store. */
+/** The persistence representation written by the private preferences store. */
 data class GameStateSnapshot(
   val teamCount: Int,
-  val boardSize: Int,
+  val boardRows: Int,
+  val boardColumns: Int,
+  val linkBoardDimensions: Boolean = false,
   val tilesPerTeam: Int,
   val turnOrder: List<Int>,
   val firstTeamBonus: Boolean,
-  val seed: Long,
+  val keycard: List<Int>,
   val timerDurationSeconds: Int?,
   val gameMode: Boolean,
   val activeTeam: Int,
@@ -37,11 +40,13 @@ data class GameStateSnapshot(
 fun GameState.toSnapshot(): GameStateSnapshot =
   GameStateSnapshot(
     teamCount = settings.teamCount,
-    boardSize = settings.boardSize,
+    boardRows = settings.boardRows,
+    boardColumns = settings.boardColumns,
+    linkBoardDimensions = settings.linkBoardDimensions,
     tilesPerTeam = settings.tilesPerTeam,
     turnOrder = settings.turnOrder,
     firstTeamBonus = settings.firstTeamBonus,
-    seed = settings.seed,
+    keycard = keycard,
     timerDurationSeconds = timer.durationSeconds,
     gameMode = gameMode,
     activeTeam = activeTeam,
@@ -54,12 +59,14 @@ fun GameStateSnapshot.toGameState(): GameState =
     GameState(
       settings = KeycardSettings(
         teamCount = teamCount,
-        boardSize = boardSize,
+        boardRows = boardRows,
+        boardColumns = boardColumns,
+        linkBoardDimensions = linkBoardDimensions,
         tilesPerTeam = tilesPerTeam,
         turnOrder = turnOrder,
         firstTeamBonus = firstTeamBonus,
-        seed = seed,
       ),
+      keycard = keycard,
       timer = TurnTimer(timerDurationSeconds),
       gameMode = gameMode,
       activeTeam = activeTeam,
@@ -71,6 +78,7 @@ fun GameStateSnapshot.toGameState(): GameState =
 /** Repairs corrupt or old saved values while retaining as much game state as possible. */
 fun normalizedGameState(state: GameState): GameState {
   val settings = normalized(state.settings)
+  val keycard = state.keycard.takeIf { isValidKeycard(it, settings) } ?: generateKeycard(settings)
   val duration = state.timer.durationSeconds?.takeIf { it > 0 }
   val timer = TurnTimer(duration)
   val activeTeam = state.activeTeam.takeIf { it in settings.turnOrder } ?: settings.turnOrder.first()
@@ -80,6 +88,7 @@ fun normalizedGameState(state: GameState): GameState {
 
   return state.copy(
     settings = settings,
+    keycard = keycard,
     timer = timer,
     activeTeam = activeTeam,
     remainingSeconds = remainingSeconds,

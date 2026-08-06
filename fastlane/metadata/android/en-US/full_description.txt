@@ -3,8 +3,8 @@ Set up a Codenames keycard, then run the game from the same offline app.
 Codenames Keycards generates colorful spymaster keycards directly on your Android device. Arrange teams in turn order, choose a timer if you want one, and hand the board to the spymaster.
 
 FEATURES
-• Generate keycards entirely offline.
-• Choose board sizes from 2×2 to 10×10.
+• Generate uniformly random keycards entirely offline.
+• Set rows and columns independently from 2 to 10, including rectangular grids such as 4×6.
 • Play with two, three, or four teams.
 • Set the number of tiles for each team and drag teams into turn order.
 • Give only the first team an optional extra tile.

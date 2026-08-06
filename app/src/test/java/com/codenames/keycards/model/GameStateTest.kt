@@ -11,12 +11,35 @@ class GameStateTest {
   fun snapshotRoundTrip_preservesTheSavedBoardAndGameState() {
     val state =
       GameState(
-        settings = KeycardSettings(teamCount = 3, turnOrder = listOf(3, 1, 2), firstTeamBonus = false, seed = 987L),
+        settings =
+          KeycardSettings(
+            teamCount = 3,
+            boardRows = 4,
+            boardColumns = 6,
+            tilesPerTeam = 7,
+            turnOrder = listOf(3, 1, 2),
+            firstTeamBonus = false,
+          ),
         timer = TurnTimer(90),
         gameMode = true,
         activeTeam = 1,
         remainingSeconds = 47,
         isPaused = true,
+      )
+
+    assertEquals(state, state.toSnapshot().toGameState())
+  }
+
+  @Test
+  fun snapshotRoundTrip_preservesLinkedBoardDimensions() {
+    val state =
+      GameState(
+        settings =
+          KeycardSettings(
+            boardRows = 6,
+            boardColumns = 6,
+            linkBoardDimensions = true,
+          ),
       )
 
     assertEquals(state, state.toSnapshot().toGameState())

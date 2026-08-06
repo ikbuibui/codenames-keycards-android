@@ -6,12 +6,12 @@ Codenames Keycards is an independent, unofficial companion app and is not affili
 
 ## How it works
 
-- Generate keycards entirely on your device.
-- Choose board sizes from 2×2 to 10×10, subject to the selected teams and tile counts fitting on the board.
+- Generate keycards entirely on your device, with every valid arrangement equally likely.
+- Choose rows and columns independently from 2 to 10 (for example, 4×6), or link them to keep the grid square, subject to the selected teams and tile counts fitting on the board.
 - Drag teams into the desired turn order. The first team begins the game, and can optionally receive one extra tile.
 - Play with a countdown selected through rolling minute and second pickers, or choose No timer and tap `∞` to advance turns.
 - Start a focused game screen with the active team, keycard, and pause menu. The display stays awake only while an unpaused game is running.
-- Your board, setup, and game progress are always saved in the app's private storage. An interrupted game returns paused, so time never elapses while the app is away.
+- Your generated board, setup, and game progress are always saved in the app's private storage. An interrupted game returns paused, so time never elapses while the app is away.
 - Use the app offline: it has no network permission, web view, analytics SDK, remote API, or downloaded game data. Cloud backup is disabled.
 
 ## Related project
@@ -20,7 +20,7 @@ This Android app was inspired by the [Codenames Key Card Generator](https://gith
 
 ## Build from source
 
-To build the app yourself, install JDK 17 or newer and the Android SDK. From this directory, run:
+To build the app yourself, install JDK 17 and the Android SDK. From this directory, run:
 
 ```sh
 ./gradlew testDebugUnitTest assembleDebug

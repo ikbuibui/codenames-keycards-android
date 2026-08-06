@@ -1,0 +1,3 @@
+• Configure rows and columns independently for rectangular keycards, or link them to keep the grid square.
+• Generate uniformly random keycards and retain the exact generated board.
+• Explicitly exclude saved games from backup and device transfer.

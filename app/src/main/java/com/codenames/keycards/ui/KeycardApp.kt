@@ -1,9 +1,9 @@
 package com.codenames.keycards.ui
 
-import android.app.Activity
 import android.view.ContextThemeWrapper
 import android.view.WindowManager
 import android.widget.NumberPicker
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -48,6 +48,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -60,7 +61,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -71,12 +71,13 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.codenames.keycards.data.GameStateStore
 import com.codenames.keycards.model.DEFAULT_TURN_DURATION_SECONDS
 import com.codenames.keycards.model.GameState
 import com.codenames.keycards.model.KeycardSettings
-import com.codenames.keycards.model.MAX_BOARD_SIZE
-import com.codenames.keycards.model.MIN_BOARD_SIZE
+import com.codenames.keycards.model.MAX_BOARD_DIMENSION
+import com.codenames.keycards.model.MIN_BOARD_DIMENSION
 import com.codenames.keycards.model.TurnTimer
 import com.codenames.keycards.model.TileRole
 import com.codenames.keycards.model.advanceTurn
@@ -84,10 +85,10 @@ import com.codenames.keycards.model.exitToSetup
 import com.codenames.keycards.model.generateKeycard
 import com.codenames.keycards.model.maximumTeamCount
 import com.codenames.keycards.model.maximumTilesPerTeam
-import com.codenames.keycards.model.minimumBoardSize
 import com.codenames.keycards.model.normalized
 import com.codenames.keycards.model.normalizedGameState
 import com.codenames.keycards.model.pauseGame
+import com.codenames.keycards.model.requiredTiles
 import com.codenames.keycards.model.resumeGame
 import com.codenames.keycards.model.startGame
 import com.codenames.keycards.model.tickTimer
@@ -155,9 +156,7 @@ fun KeycardApp() {
     SetupScreen(
       gameState = gameState,
       onGenerate = {
-        updateSettings { settings ->
-          settings.copy(seed = maxOf(System.currentTimeMillis(), settings.seed + 1))
-        }
+        updateState { state -> state.copy(keycard = generateKeycard(state.settings)) }
       },
       onStartGame = { updateState(::startGame) },
       onSettingsChanged = ::updateSettings,
@@ -182,7 +181,7 @@ private fun PauseWhenActivityStops(gameState: GameState, onPause: () -> Unit) {
 
 @Composable
 private fun KeepScreenOn(keepScreenOn: Boolean) {
-  val activity = LocalContext.current as? Activity
+  val activity = LocalActivity.current
   DisposableEffect(activity, keepScreenOn) {
     if (keepScreenOn) {
       activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -202,7 +201,6 @@ private fun SetupScreen(
   onTimerChanged: (TurnTimer) -> Unit,
 ) {
   val settings = gameState.settings
-  val board = remember(settings) { generateKeycard(settings) }
 
   Surface(
     modifier = Modifier.fillMaxSize(),
@@ -220,7 +218,7 @@ private fun SetupScreen(
       verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
       Header()
-      KeycardBoard(board = board, settings = settings)
+      KeycardBoard(board = gameState.keycard, settings = settings)
       BoardActions(onGenerate = onGenerate, onStartGame = onStartGame)
       SettingsPanel(
         settings = settings,
@@ -253,45 +251,60 @@ private fun Header() {
 }
 
 @Composable
-private fun KeycardBoard(board: List<Int>, settings: KeycardSettings) {
+private fun KeycardBoard(
+  board: List<Int>,
+  settings: KeycardSettings,
+  modifier: Modifier = Modifier,
+) {
   val firstTeam = settings.turnOrder.firstOrNull()
   val borderColor = firstTeam?.let(::teamFor)?.color ?: WoodLight
 
-  BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-    val boardWidth = minOf(maxWidth - 8.dp, 560.dp)
-    val symbolSize = (boardWidth.value / settings.boardSize * 0.45f).coerceIn(10f, 30f).sp
+  BoxWithConstraints(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+    val gridAspectRatio = settings.boardColumns.toFloat() / settings.boardRows
+    // Keep either orientation within the same maximum extent and any bounded height.
+    val maximumWidth = if (gridAspectRatio < 1f) 560.dp * gridAspectRatio else 560.dp
+    val heightLimitedWidth =
+      if (maxHeight.value.isFinite()) maxHeight * gridAspectRatio else maximumWidth
+    val boardWidth = minOf(maxWidth - 8.dp, maximumWidth, heightLimitedWidth)
+    val boardHeight = boardWidth / gridAspectRatio
+    val frameScale = (minOf(boardWidth.value, boardHeight.value) / 300f).coerceIn(0.25f, 1f)
+    val spacing = (4f * frameScale).dp
+    val symbolSize =
+      (boardWidth.value / settings.boardColumns * 0.45f)
+        .coerceIn(8f, 30f)
+        .sp
 
     Box(
       modifier =
         Modifier
           .width(boardWidth)
-          .aspectRatio(1f)
-          .clip(RoundedCornerShape(30.dp))
+          .aspectRatio(gridAspectRatio)
+          .clip(RoundedCornerShape((30f * frameScale).dp))
           .background(borderColor)
-          .padding(if (firstTeam == null) 0.dp else 7.dp),
+          .padding(if (firstTeam == null) 0.dp else (7f * frameScale).dp),
     ) {
       Box(
         modifier =
           Modifier
             .fillMaxSize()
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape((24f * frameScale).dp))
             .background(WoodLight)
-            .padding(9.dp)
-            .clip(RoundedCornerShape(17.dp))
+            .padding((9f * frameScale).dp)
+            .clip(RoundedCornerShape((17f * frameScale).dp))
             .background(WoodDark)
-            .padding(10.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .padding((10f * frameScale).dp)
+            .clip(RoundedCornerShape((10f * frameScale).dp))
             .background(Color.Black)
-            .padding(5.dp),
+            .padding((5f * frameScale).dp),
       ) {
-        Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-          repeat(settings.boardSize) { row ->
+        Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(spacing)) {
+          repeat(settings.boardRows) { row ->
             Row(
               modifier = Modifier.fillMaxWidth().weight(1f),
-              horizontalArrangement = Arrangement.spacedBy(4.dp),
+              horizontalArrangement = Arrangement.spacedBy(spacing),
             ) {
-              repeat(settings.boardSize) { column ->
-                val role = board[row * settings.boardSize + column]
+              repeat(settings.boardColumns) { column ->
+                val role = board[row * settings.boardColumns + column]
                 KeycardTile(role = role, symbolSize = symbolSize, modifier = Modifier.weight(1f).fillMaxHeight())
               }
             }
@@ -345,9 +358,26 @@ private fun SettingsPanel(
   onSettingsChanged: ((KeycardSettings) -> KeycardSettings) -> Unit,
   onTimerChanged: (TurnTimer) -> Unit,
 ) {
-  val minBoard = minimumBoardSize(settings.teamCount, settings.tilesPerTeam, settings.firstTeamBonus)
-  val maxTiles = maximumTilesPerTeam(settings.boardSize, settings.teamCount, settings.firstTeamBonus)
-  val maxTeams = maximumTeamCount(settings.boardSize, settings.tilesPerTeam, settings.firstTeamBonus)
+  val occupiedTiles =
+    requiredTiles(
+      settings.teamCount,
+      settings.tilesPerTeam,
+      settings.firstTeamBonus,
+    )
+  val maxTiles =
+    maximumTilesPerTeam(
+      settings.boardRows,
+      settings.boardColumns,
+      settings.teamCount,
+      settings.firstTeamBonus,
+    )
+  val maxTeams =
+    maximumTeamCount(
+      settings.boardRows,
+      settings.boardColumns,
+      settings.tilesPerTeam,
+      settings.firstTeamBonus,
+    )
 
   Card(
     modifier = Modifier.fillMaxWidth(),
@@ -362,13 +392,10 @@ private fun SettingsPanel(
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
       }
-      SettingStepper(
-        title = "Board size",
-        value = settings.boardSize,
-        decreaseEnabled = settings.boardSize > minBoard,
-        increaseEnabled = settings.boardSize < MAX_BOARD_SIZE,
-        onDecrease = { onSettingsChanged { it.copy(boardSize = it.boardSize - 1) } },
-        onIncrease = { onSettingsChanged { it.copy(boardSize = it.boardSize + 1) } },
+      BoardSizeSetting(
+        settings = settings,
+        occupiedTiles = occupiedTiles,
+        onSettingsChanged = onSettingsChanged,
       )
       SettingStepper(
         title = "Tiles per team",
@@ -399,12 +426,155 @@ private fun SettingsPanel(
       )
       TimerSetting(timer = timer, onTimerChanged = onTimerChanged)
       Text(
-        text = "Board sizes run from $MIN_BOARD_SIZE×$MIN_BOARD_SIZE to $MAX_BOARD_SIZE×$MAX_BOARD_SIZE. A setting is unavailable when the board cannot fit every team tile, the assassin, and the optional extra tile.",
+        text = "Rows and columns can each run from $MIN_BOARD_DIMENSION to $MAX_BOARD_DIMENSION. A size is unavailable when the grid cannot fit every team tile, the assassin, and the optional extra tile.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
     }
   }
+}
+
+@Composable
+private fun BoardSizeSetting(
+  settings: KeycardSettings,
+  occupiedTiles: Int,
+  onSettingsChanged: ((KeycardSettings) -> KeycardSettings) -> Unit,
+) {
+  var showBoardSizePicker by remember { mutableStateOf(false) }
+
+  Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+      Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text("Board size", style = MaterialTheme.typography.titleSmall)
+        Text(
+          "${settings.boardRows} rows × ${settings.boardColumns} columns",
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+      FilterChip(
+        selected = false,
+        onClick = { showBoardSizePicker = true },
+        label = { Text("${settings.boardRows} × ${settings.boardColumns}") },
+      )
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+      Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text("Link rows and columns", style = MaterialTheme.typography.titleSmall)
+        Text(
+          if (settings.linkBoardDimensions) {
+            "The board stays square when its size changes."
+          } else {
+            "Choose rows and columns independently."
+          },
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+      Switch(
+        checked = settings.linkBoardDimensions,
+        onCheckedChange = { linked ->
+          onSettingsChanged { current ->
+            if (linked) {
+              val dimension = maxOf(current.boardRows, current.boardColumns)
+              current.copy(
+                boardRows = dimension,
+                boardColumns = dimension,
+                linkBoardDimensions = true,
+              )
+            } else {
+              current.copy(linkBoardDimensions = false)
+            }
+          }
+        },
+      )
+    }
+  }
+
+  if (showBoardSizePicker) {
+    BoardSizePickerDialog(
+      initialRows = settings.boardRows,
+      initialColumns = settings.boardColumns,
+      linkedDimensions = settings.linkBoardDimensions,
+      occupiedTiles = occupiedTiles,
+      onDismiss = { showBoardSizePicker = false },
+      onBoardSizeSelected = { rows, columns ->
+        onSettingsChanged { it.copy(boardRows = rows, boardColumns = columns) }
+        showBoardSizePicker = false
+      },
+    )
+  }
+}
+
+@Composable
+private fun BoardSizePickerDialog(
+  initialRows: Int,
+  initialColumns: Int,
+  linkedDimensions: Boolean,
+  occupiedTiles: Int,
+  onDismiss: () -> Unit,
+  onBoardSizeSelected: (rows: Int, columns: Int) -> Unit,
+) {
+  var rows by remember(initialRows) { mutableIntStateOf(initialRows) }
+  var columns by remember(initialColumns) { mutableIntStateOf(initialColumns) }
+  val rowsRange =
+    if (linkedDimensions) {
+      minimumSquareDimension(occupiedTiles)..MAX_BOARD_DIMENSION
+    } else {
+      minimumDimension(occupiedTiles, columns)..MAX_BOARD_DIMENSION
+    }
+  val columnsRange =
+    if (linkedDimensions) {
+      minimumSquareDimension(occupiedTiles)..MAX_BOARD_DIMENSION
+    } else {
+      minimumDimension(occupiedTiles, rows)..MAX_BOARD_DIMENSION
+    }
+
+  AlertDialog(
+    onDismissRequest = onDismiss,
+    title = { Text("Board size") },
+    text = {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        RollingNumberPicker(
+          label = "Rows",
+          value = rows,
+          range = rowsRange,
+          onValueChanged = { value ->
+            rows = value
+            if (linkedDimensions) columns = value
+          },
+        )
+        RollingNumberPicker(
+          label = "Columns",
+          value = columns,
+          range = columnsRange,
+          onValueChanged = { value ->
+            columns = value
+            if (linkedDimensions) rows = value
+          },
+        )
+      }
+    },
+    confirmButton = {
+      TextButton(onClick = { onBoardSizeSelected(rows, columns) }) { Text("Set board") }
+    },
+    dismissButton = {
+      TextButton(onClick = onDismiss) { Text("Cancel") }
+    },
+  )
+}
+
+private fun minimumDimension(occupiedTiles: Int, otherDimension: Int): Int =
+  ((occupiedTiles + otherDimension - 1) / otherDimension).coerceIn(MIN_BOARD_DIMENSION, MAX_BOARD_DIMENSION)
+
+private fun minimumSquareDimension(occupiedTiles: Int): Int {
+  var dimension = MIN_BOARD_DIMENSION
+  while (dimension * dimension < occupiedTiles) dimension++
+  return dimension.coerceAtMost(MAX_BOARD_DIMENSION)
 }
 
 @Composable
@@ -566,9 +736,9 @@ private fun DurationPickerDialog(
   onDurationSelected: (Int) -> Unit,
 ) {
   var minutes by remember(initialDurationSeconds) {
-    mutableStateOf((initialDurationSeconds / 60).coerceIn(0, MAX_TURN_DURATION_MINUTES))
+    mutableIntStateOf((initialDurationSeconds / 60).coerceIn(0, MAX_TURN_DURATION_MINUTES))
   }
-  var seconds by remember(initialDurationSeconds) { mutableStateOf(initialDurationSeconds % 60) }
+  var seconds by remember(initialDurationSeconds) { mutableIntStateOf(initialDurationSeconds % 60) }
   val selectedDurationSeconds = minutes * 60 + seconds
 
   AlertDialog(
@@ -624,11 +794,17 @@ private fun RollingNumberPicker(
         NumberPicker(ContextThemeWrapper(context, android.R.style.Theme_Material_NoActionBar)).apply {
           minValue = range.first
           maxValue = range.last
-          wrapSelectorWheel = true
+          wrapSelectorWheel = range.count() > 3
           setFormatter(NumberPicker.Formatter { number -> formatter(number) })
         }
       },
       update = { picker ->
+        picker.setOnValueChangedListener(null)
+        if (picker.minValue != range.first || picker.maxValue != range.last) {
+          picker.minValue = range.first
+          picker.maxValue = range.last
+          picker.wrapSelectorWheel = range.count() > 3
+        }
         if (picker.value != value) picker.value = value
         picker.setOnValueChangedListener { _, _, newValue -> onValueChanged(newValue) }
       },
@@ -647,7 +823,6 @@ private fun GameScreen(
   onExit: () -> Unit,
 ) {
   val settings = gameState.settings
-  val board = remember(settings) { generateKeycard(settings) }
   val activeTeam = teamFor(gameState.activeTeam)
   var showPauseSheet by remember { mutableStateOf(false) }
 
@@ -662,6 +837,7 @@ private fun GameScreen(
         modifier =
           Modifier
             .fillMaxWidth()
+            .weight(1f)
             .widthIn(max = 720.dp)
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -674,7 +850,11 @@ private fun GameScreen(
           isPaused = gameState.isPaused,
           onAdvanceTurn = onAdvanceTurn,
         )
-        KeycardBoard(board = board, settings = settings)
+        KeycardBoard(
+          board = gameState.keycard,
+          settings = settings,
+          modifier = Modifier.weight(1f),
+        )
         OutlinedButton(
           onClick = {
             if (!gameState.isPaused) onPause()
@@ -784,7 +964,7 @@ private fun tileColor(role: Int): Color =
 private fun SetupPreview() {
   CodenamesKeycardsTheme {
     SetupScreen(
-      gameState = GameState(settings = KeycardSettings(seed = 42L)),
+      gameState = GameState(settings = KeycardSettings()),
       onGenerate = {},
       onStartGame = {},
       onSettingsChanged = {},
@@ -798,7 +978,7 @@ private fun SetupPreview() {
 private fun GamePreview() {
   CodenamesKeycardsTheme {
     GameScreen(
-      gameState = startGame(GameState(settings = KeycardSettings(seed = 42L))),
+      gameState = startGame(GameState(settings = KeycardSettings())),
       onAdvanceTurn = {},
       onPause = {},
       onResume = {},
